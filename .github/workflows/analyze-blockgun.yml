@@ -10,6 +10,7 @@ on:
       - "tools/unity_scene_graph.py"
       - "tools/build_godot_preview.py"
       - "tools/build_godot_all_maps.py"
+      - "tools/map_quality_audit.py"
   workflow_dispatch:
 
 permissions:
