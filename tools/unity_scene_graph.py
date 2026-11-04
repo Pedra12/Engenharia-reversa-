@@ -66,6 +66,8 @@ def val(v):
 def attr(d,k):
  try: return getattr(d,k,None)
  except Exception: return None
+def safe(s):
+ return (re.sub(r"[^A-Za-z0-9._-]+","_",str(s or "unnamed")).strip("._") or "unnamed")[:100]
 def main():
  import UnityPy
  OUT.mkdir(parents=True,exist_ok=True)
@@ -96,7 +98,7 @@ def main():
        if not b: break
        dst.write(b)
    env=UnityPy.load(str(root)); objects=list(env.objects)
-   records={}; errors=[]; counts=collections.Counter(); external_paths={}
+   records={}; errors=[]; counts=collections.Counter(); external_paths={}; mesh_exports={}
    for i,o in enumerate(objects):
     pid=int(getattr(o,"path_id",i)); t=typ(o); src=source(o)
     try:
@@ -108,6 +110,16 @@ def main():
       paths.append(str(ep).replace("\\\\","/").rsplit("/",1)[-1])
      external_paths[src]=paths
      d=o.read(); name=attr(d,"m_Name") or attr(d,"name") or ""
+     if t=="Mesh":
+      try:
+       exported=d.export()
+       payload=exported if isinstance(exported,bytes) else str(exported).encode("utf-8")
+       mesh_dir=OUT/"exported_meshes"; mesh_dir.mkdir(parents=True,exist_ok=True)
+       mesh_name=f"{safe(src)}__{pid}__{safe(name or 'mesh')}.obj"
+       (mesh_dir/mesh_name).write_bytes(payload)
+       mesh_exports[(src,pid)]=str(pathlib.Path("exported_meshes")/mesh_name)
+      except Exception as mesh_error:
+       errors.append({"source":src,"path_id":pid,"type":t,"error":"mesh export: "+str(mesh_error)[:220]})
      r={"source":src,"path_id":pid,"type":t,"name":str(name)[:220],"refs":[]}
      counts[t]+=1
      for f in FIELDS.get(t,()):
@@ -115,6 +127,12 @@ def main():
        fid=p["file_id"]
        target_source=src if fid==0 else (paths[fid-1] if 0 < fid <= len(paths) else "")
        r["refs"].append({"field":f,"file_id":fid,"path_id":p["path_id"],"target_source":target_source})
+     if t=="Material":
+      saved=attr(d,"m_SavedProperties")
+      for prop in ("m_TexEnvs",):
+       for p in refs(attr(saved,prop)):
+        fid=p["file_id"]; target_source=src if fid==0 else (paths[fid-1] if 0 < fid <= len(paths) else "")
+        r["refs"].append({"field":prop,"file_id":fid,"path_id":p["path_id"],"target_source":target_source})
      if t in TRANSFORMS:
       for f in ("m_LocalPosition","m_LocalRotation","m_LocalScale"): r[f]=val(attr(d,f))
       p=refs(attr(d,"m_Father")); r["parent"]=p[0]["path_id"] if p else 0
@@ -142,6 +160,42 @@ def main():
       pg=index.get((r["source"],parent.get("game_object"))); item["parent_name"]=pg["name"] if pg else parent["name"]
      else: roots.append(item)
      hierarchy.append(item)
+   # Build per-level manifests from recovered Transform -> GameObject -> Component links.
+   map_manifests=[]
+   for level in [f"level{i}" for i in range(1,10)]:
+    level_transforms={int(r["path_id"]):r for r in records.values() if r["source"]==level and r["type"] in TRANSFORMS}
+    level_gameobjects={int(r["path_id"]):r for r in records.values() if r["source"]==level and r["type"]=="GameObject"}
+    level_components={int(r["path_id"]):r for r in records.values() if r["source"]==level and r["type"] not in TRANSFORMS and r["type"]!="GameObject"}
+    map_root=next((r for r in level_transforms.values() if r.get("parent",0)==0 and (level_gameobjects.get(r.get("game_object")) or {}).get("name","").startswith("lvl_")),None)
+    if not map_root: continue
+    def component_info(cid):
+     c=level_components.get(int(cid))
+     if not c: return {"path_id":int(cid),"type":"UNKNOWN"}
+     info={"path_id":int(cid),"type":c["type"],"name":c["name"],"references":[]}
+     for ref in c.get("refs",[]):
+      target_source=ref.get("target_source") or level
+      entry={"field":ref["field"],"target_source":target_source,"target_path_id":ref["path_id"]}
+      if ref["field"]=="m_Mesh":
+       entry["exported_obj"]=mesh_exports.get((target_source,ref["path_id"]))
+      info["references"].append(entry)
+     return info
+    def build_node(tid,seen):
+     if tid in seen: return {"error":"cycle","transform_path_id":tid}
+     seen=seen|{tid}; tr=level_transforms[tid]; go=level_gameobjects.get(tr.get("game_object"))
+     node={"name":go["name"] if go else tr["name"],"transform_path_id":tid,"game_object_path_id":tr.get("game_object"),"position":tr.get("m_LocalPosition"),"rotation":tr.get("m_LocalRotation"),"scale":tr.get("m_LocalScale"),"active":go.get("active") if go else None,"layer":go.get("layer") if go else None,"tag":go.get("tag") if go else None,"components":[component_info(cid) for cid in (go.get("components",[]) if go else [])],"children":[]}
+     for child_id in tr.get("children",[]):
+      if int(child_id) in level_transforms: node["children"].append(build_node(int(child_id),seen))
+     return node
+    root_go=level_gameobjects.get(map_root.get("game_object"))
+    map_name=root_go["name"] if root_go else map_root["name"]
+    manifest={"source_level":level,"map_root":map_name,"root_transform_path_id":int(map_root["path_id"]),"node_count":0,"mesh_exports":sorted({v for v in mesh_exports.values()}),"root":build_node(int(map_root["path_id"]),set())}
+    def count_nodes(n):
+     return 1+sum(count_nodes(c) for c in n.get("children",[]))
+    manifest["node_count"]=count_nodes(manifest["root"])
+    map_dir=OUT/"maps"; map_dir.mkdir(parents=True,exist_ok=True)
+    out_name=safe(map_name)+".json"
+    (map_dir/out_name).write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
+    map_manifests.append({"level":level,"map":map_name,"nodes":manifest["node_count"],"file":str(pathlib.Path("maps")/out_name)})
    def write_csv(path,rows):
     rows=list(rows)
     if not rows: path.write_text("no_data\n",encoding="utf-8"); return
@@ -154,10 +208,10 @@ def main():
    write_csv(OUT/"UNITY_REFERENCE_EDGES.csv",edges)
    write_csv(OUT/"UNITY_TRANSFORM_HIERARCHY.csv",hierarchy)
    write_csv(OUT/"UNITY_SCENE_ROOT_CANDIDATES.csv",roots)
-   summary={"serialized_objects_read":len(records),"types":dict(counts.most_common()),"reference_edges":len(edges),"transform_objects":len(hierarchy),"root_transform_candidates":len(roots),"errors":len(errors),"split_families":len(groups),"split_chunks":sum(map(len,groups.values())),"source_files":sorted({r["source"] for r in records.values()})}
+   summary={"serialized_objects_read":len(records),"types":dict(counts.most_common()),"reference_edges":len(edges),"transform_objects":len(hierarchy),"root_transform_candidates":len(roots),"errors":len(errors),"split_families":len(groups),"split_chunks":sum(map(len,groups.values())),"exported_meshes":len(mesh_exports),"map_manifests":map_manifests,"source_files":sorted({r["source"] for r in records.values()})}
    (OUT/"UNITY_SCENE_GRAPH.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
    (OUT/"UNITY_SCENE_GRAPH_ERRORS.json").write_text(json.dumps(errors[:5000],ensure_ascii=False,indent=2),encoding="utf-8")
-   lines=["# Segunda passagem: grafo relacional Unity","",f"- Objetos lidos: **{len(records)}**",f"- Tipos: **{len(counts)}**",f"- Referências PPtr: **{len(edges)}**",f"- Transform/RectTransform: **{len(hierarchy)}**",f"- Candidatos a raízes: **{len(roots)}**",f"- Erros de leitura: **{len(errors)}**",f"- Famílias split: **{len(groups)}**",f"- Partes split: **{summary['split_chunks']}**","","## Arquivos","- UNITY_RELATIONAL_OBJECTS.csv: objetos, IDs, origem, componentes e referências.","- UNITY_REFERENCE_EDGES.csv: relações entre objetos, incluindo o arquivo externo de destino quando resolvido.","- UNITY_TRANSFORM_HIERARCHY.csv: pai/filhos e transformações locais.","- UNITY_SCENE_ROOT_CANDIDATES.csv: raízes candidatas.","- UNITY_SCENE_GRAPH.json: resumo e arquivos de origem.","- UNITY_SCENE_GRAPH_ERRORS.json: amostra de erros.","","## Limitações","- Referências PPtr externas são resolvidas usando a tabela de arquivos externos do SerializedFile quando disponível.","- Uma raiz de Transform não prova que seja uma cena jogável.","- A reconstrução exige validar materiais, colisões, recursos externos e geometria.","- Este relatório não converte cenas Unity automaticamente para Godot."]
+   lines=["# Segunda passagem: grafo relacional Unity","",f"- Objetos lidos: **{len(records)}**",f"- Tipos: **{len(counts)}**",f"- Referências PPtr: **{len(edges)}**",f"- Transform/RectTransform: **{len(hierarchy)}**",f"- Candidatos a raízes: **{len(roots)}**",f"- Erros de leitura: **{len(errors)}**",f"- Famílias split: **{len(groups)}**",f"- Partes split: **{summary['split_chunks']}**","","## Arquivos","- UNITY_RELATIONAL_OBJECTS.csv: objetos, IDs, origem, componentes e referências.","- UNITY_REFERENCE_EDGES.csv: relações entre objetos, incluindo o arquivo externo de destino quando resolvido.","- UNITY_TRANSFORM_HIERARCHY.csv: pai/filhos e transformações locais.","- UNITY_SCENE_ROOT_CANDIDATES.csv: raízes candidatas.","- UNITY_SCENE_GRAPH.json: resumo e arquivos de origem.","- UNITY_SCENE_GRAPH_ERRORS.json: amostra de erros.","- maps/: manifestos hierárquicos de cada mapa identificado.","- exported_meshes/: malhas OBJ exportadas com origem e path_id únicos.","","## Limitações","- Referências PPtr externas são resolvidas usando a tabela de arquivos externos do SerializedFile quando disponível.","- Uma raiz de Transform não prova que seja uma cena jogável.","- A reconstrução exige validar materiais, colisões, recursos externos e geometria.","- Este relatório não converte cenas Unity automaticamente para Godot."]
    (OUT/"UNITY_SCENE_GRAPH.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
    print("\n".join(lines))
    print("TYPE_COUNTS",json.dumps(counts.most_common(),ensure_ascii=False))
