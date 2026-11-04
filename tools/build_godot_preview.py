@@ -206,10 +206,10 @@ func _create_camera() -> void:
     var camera := Camera3D.new()
     camera.name = "PreviewCamera"
     camera.position = Vector3(-12.0, 42.0, 76.0)
+    add_child(camera)
     camera.look_at(Vector3(-50.0, 0.0, 5.0), Vector3.UP)
     camera.current = true
     camera.fov = 62.0
-    add_child(camera)
 
 func _create_overlay() -> void:
     var layer := CanvasLayer.new()
