@@ -56,6 +56,43 @@ jobs:
           chmod +x /tmp/godot/Godot_v4.4.1-stable_linux.x86_64
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot_project --import --quit
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project --quit-after 5
+      - name: Install Java and Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Godot Android export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -o /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          android/android_sdk_path = "$ANDROID_HOME"
+          android/java_sdk_path = "$JAVA_HOME"
+          EOF
+      - name: Export Android preview APK
+        run: |
+          set -euo pipefail
+          mkdir -p godot_project/build
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project --export-debug Android godot_project/build/BlockGunMapsPreview.apk
+          test -s godot_project/build/BlockGunMapsPreview.apk
+          ls -lh godot_project/build/BlockGunMapsPreview.apk
+      - name: Upload Android preview APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockGun-Android-Preview-APK
+          path: godot_project/build/BlockGunMapsPreview.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Publish summary
         uses: actions/github-script@v7
         with:
