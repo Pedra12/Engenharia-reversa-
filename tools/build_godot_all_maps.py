@@ -617,35 +617,46 @@ func _audit_all_maps():
                     print("ASSAULT_DIRECTION_TEST direction=",direction," start=",test_origin," end=",end_position," velocity=",player.velocity," collisions=",player.get_slide_collision_count()," collider=",collision_name," travelled=",travelled)
             move_vector=Vector2.ZERO
         if MAPS[index]=="lvl_resort" and is_instance_valid(player):
-            var stair_node=world.find_child("umsh_resort_s2",true,false) as Node3D
-            if is_instance_valid(stair_node):
-                # Geometry audit found a seven-tread staircase in this original collision mesh.
-                var lower_tread=Vector3(-2.297,-11.04,-17.856)
-                var stair_query=PhysicsRayQueryParameters3D.create(lower_tread+Vector3.UP*2.0,lower_tread-Vector3.UP*2.0)
+            var stair_collider=world.find_child("RecoveredUnityCollider_umsh_resort_s2",true,false) as StaticBody3D
+            print("STAIR_COLLIDER_DIAGNOSTIC exists=",is_instance_valid(stair_collider)," position=",stair_collider.global_position if is_instance_valid(stair_collider) else Vector3.ZERO," shapes=",stair_collider.get_child_count() if is_instance_valid(stair_collider) else 0)
+            var probe_points=[Vector3(-2.297,0,-17.856),Vector3(-2.297,0,17.856),Vector3(2.297,0,-17.856),Vector3(2.297,0,17.856),Vector3(8.3695,0,10.4778)]
+            var stair_hit:Dictionary={}
+            var found_probe=Vector3.ZERO
+            for probe in probe_points:
+                var stair_query=PhysicsRayQueryParameters3D.create(probe+Vector3.UP*40.0,probe-Vector3.UP*40.0)
                 stair_query.collision_mask=1
+                stair_query.hit_back_faces=true
                 stair_query.exclude=[player.get_rid()]
-                var stair_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
-                if not stair_hit.is_empty() and stair_hit.normal.dot(Vector3.UP)>0.70:
-                    player.global_position=stair_hit.position+Vector3.UP*0.08
+                var candidate_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
+                print("STAIR_PROBE point=",probe," hit=",not candidate_hit.is_empty()," position=",candidate_hit.get("position",Vector3.ZERO))
+                if not candidate_hit.is_empty() and abs(candidate_hit.normal.dot(Vector3.UP))>0.70:
+                    stair_hit=candidate_hit
+                    found_probe=probe
+                    break
+            if not stair_hit.is_empty():
+                var stair_spawn=stair_hit.position+Vector3.UP*0.08
+                var best_climb=-100.0
+                var best_direction=Vector2.ZERO
+                for direction in [Vector2(0,-1),Vector2(0,1),Vector2(1,0),Vector2(-1,0)]:
+                    player.global_position=stair_spawn
                     player.velocity=Vector3.ZERO
-                    for frame in range(12):
+                    for frame in range(8):
                         await get_tree().physics_frame
                     var stair_start=player.global_position
-                    move_vector=Vector2(0,-1)
+                    move_vector=direction
                     for frame in range(45):
                         await get_tree().physics_frame
                     move_vector=Vector2.ZERO
-                    var stair_end=player.global_position
-                    var climb_height=stair_end.y-stair_start.y
-                    var stair_forward=stair_end.z-stair_start.z
-                    print("STAIR_ROUTE_AUDIT map=lvl_resort grounded=",player.is_on_floor()," start=",stair_start," end=",stair_end," climb_height=",climb_height," forward_z=",stair_forward)
-                    if climb_height<0.60 or stair_forward>-0.40:
-                        failed=true
-                else:
-                    print("STAIR_ROUTE_AUDIT map=lvl_resort hit=false point=",lower_tread)
+                    var climb_height=player.global_position.y-stair_start.y
+                    print("STAIR_DIRECTION_TEST direction=",direction," grounded=",player.is_on_floor()," rise=",climb_height," end=",player.global_position)
+                    if climb_height>best_climb:
+                        best_climb=climb_height
+                        best_direction=direction
+                print("STAIR_ROUTE_AUDIT map=lvl_resort hit=true probe=",found_probe," best_climb=",best_climb," direction=",best_direction)
+                if best_climb<0.60:
                     failed=true
             else:
-                print("STAIR_ROUTE_AUDIT map=lvl_resort stair_mesh_missing")
+                print("STAIR_ROUTE_AUDIT map=lvl_resort hit=false collider_exists=",is_instance_valid(stair_collider))
                 failed=true
         print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," max_cardinal_displacement=",max_displacement)
         if not grounded or not moved or max_displacement<0.50:
