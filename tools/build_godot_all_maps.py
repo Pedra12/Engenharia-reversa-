@@ -96,6 +96,10 @@ const MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_fore
 const TITLES=["Baghdad","Assalto","Oriente Medio","Resort","Floresta","Casa","India","Roma","Festival Deluxe"]
 var world:Node3D
 var menu:Control
+var home_panel:PanelContainer
+var selection_panel:PanelContainer
+var tutorial_panel:PanelContainer
+var map_actions:HBoxContainer
 var camera_pivot:Node3D
 var camera:Camera3D
 var camera_distance:float=80.0
