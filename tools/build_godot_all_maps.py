@@ -47,6 +47,7 @@ window/stretch/mode="canvas_items"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.055, 0.075, 0.095, 1)
 ''',encoding="utf-8")
     (PROJECT/"export_presets.cfg").write_text("""[preset.0]
