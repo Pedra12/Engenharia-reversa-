@@ -103,6 +103,16 @@ var touch_points:Dictionary={}
 var pinch_distance:float=0.0
 var dragging_mouse:bool=false
 var map_label:Label
+var walk_mode:=false
+var player:CharacterBody3D
+var walk_camera:Camera3D
+var move_touch_id:=-1
+var look_touch_id:=-1
+var move_origin:=Vector2.ZERO
+var move_vector:=Vector2.ZERO
+var walk_yaw:=0.0
+var walk_pitch:=0.0
+var jump_button:Button
 func _ready():
     _lighting()
     _make_menu()
@@ -144,7 +154,22 @@ func _make_menu():
     reset.custom_minimum_size=Vector2(190,42)
     reset.pressed.connect(_fit_camera)
     menu.add_child(reset)
+    var explore=Button.new()
+    explore.text="ENTRAR NO MAPA"
+    explore.position=Vector2(280,104)
+    explore.custom_minimum_size=Vector2(190,42)
+    explore.pressed.connect(_toggle_walk_mode)
+    menu.add_child(explore)
+    jump_button=Button.new()
+    jump_button.text="PULAR"
+    jump_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+    jump_button.position=Vector2(-150,-130)
+    jump_button.custom_minimum_size=Vector2(120,64)
+    jump_button.visible=false
+    jump_button.pressed.connect(_request_jump)
+    menu.add_child(jump_button)
 func _load_map(id:String,title:String):
+    _stop_walk_mode()
     if world:
         world.queue_free()
     world=Node3D.new()
@@ -271,6 +296,9 @@ func _count_meshes(root:Node)->int:
             total+=1
     return total
 func _unhandled_input(event):
+    if walk_mode:
+        _walk_input(event)
+        return
     if event is InputEventScreenTouch:
         if event.pressed:
             touch_points[event.index]=event.position
@@ -314,6 +342,107 @@ func _unhandled_input(event):
             _orbit(event.relative)
         else:
             _pan(event.relative)
+func _toggle_walk_mode():
+    if walk_mode:
+        _stop_walk_mode()
+    else:
+        _start_walk_mode()
+func _start_walk_mode():
+    if not world or not camera_pivot or not camera:
+        return
+    walk_mode=true
+    camera.current=false
+    camera_pivot.visible=false
+    player=CharacterBody3D.new()
+    player.name="ExplorerPlayer"
+    world.add_child(player)
+    var capsule=CapsuleShape3D.new()
+    capsule.radius=0.36
+    capsule.height=1.75
+    var collision=CollisionShape3D.new()
+    collision.shape=capsule
+    collision.position.y=0.9
+    player.add_child(collision)
+    walk_camera=Camera3D.new()
+    walk_camera.position=Vector3(0,1.55,0)
+    walk_camera.fov=75.0
+    player.add_child(walk_camera)
+    walk_camera.current=true
+    player.global_position=camera_pivot.global_position+Vector3(0,maxf(5.0,camera_distance*0.04),0)
+    walk_yaw=camera_pivot.rotation.y
+    walk_pitch=deg_to_rad(-8.0)
+    move_vector=Vector2.ZERO
+    move_touch_id=-1
+    look_touch_id=-1
+    jump_button.visible=true
+    map_label.text="MODO EXPLORAÇÃO | ESQUERDA: ANDAR | DIREITA: OLHAR"
+    print("WALK_MODE_STARTED position=",player.global_position)
+func _stop_walk_mode():
+    if not walk_mode:
+        return
+    walk_mode=false
+    if is_instance_valid(player):
+        player.queue_free()
+    player=null
+    walk_camera=null
+    if camera and is_instance_valid(camera):
+        camera.current=true
+    if camera_pivot and is_instance_valid(camera_pivot):
+        camera_pivot.visible=true
+    if jump_button:
+        jump_button.visible=false
+    move_vector=Vector2.ZERO
+    map_label.text="MODO MAPA | ARRASTE PARA EXPLORAR"
+func _request_jump():
+    if walk_mode and is_instance_valid(player) and player.is_on_floor():
+        player.velocity.y=6.0
+func _walk_input(event):
+    var screen=get_viewport().get_visible_rect().size
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            if event.position.x<screen.x*0.48 and move_touch_id==-1:
+                move_touch_id=event.index
+                move_origin=event.position
+                move_vector=Vector2.ZERO
+            elif event.position.x>=screen.x*0.48 and look_touch_id==-1:
+                look_touch_id=event.index
+        else:
+            if event.index==move_touch_id:
+                move_touch_id=-1
+                move_vector=Vector2.ZERO
+            if event.index==look_touch_id:
+                look_touch_id=-1
+    elif event is InputEventScreenDrag:
+        if event.index==move_touch_id:
+            var offset=event.position-move_origin
+            move_vector=Vector2(clampf(offset.x/75.0,-1.0,1.0),clampf(offset.y/75.0,-1.0,1.0))
+            if move_vector.length()>1.0:
+                move_vector=move_vector.normalized()
+        elif event.index==look_touch_id:
+            walk_yaw-=event.relative.x*0.004
+            walk_pitch=clampf(walk_pitch-event.relative.y*0.003,-1.15,1.15)
+            if player:
+                player.rotation.y=walk_yaw
+                walk_camera.rotation.x=walk_pitch
+    elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+        walk_yaw-=event.relative.x*0.004
+        walk_pitch=clampf(walk_pitch-event.relative.y*0.003,-1.15,1.15)
+        if player:
+            player.rotation.y=walk_yaw
+            walk_camera.rotation.x=walk_pitch
+func _physics_process(delta):
+    if not walk_mode or not is_instance_valid(player):
+        return
+    var gravity=float(ProjectSettings.get_setting("physics/3d/default_gravity",9.8))
+    if not player.is_on_floor():
+        player.velocity.y-=gravity*delta
+    var input_dir=Vector3(move_vector.x,0.0,move_vector.y)
+    var forward=Vector3(sin(walk_yaw),0.0,cos(walk_yaw))
+    var right=Vector3(forward.z,0.0,-forward.x)
+    var direction=(right*input_dir.x+forward*input_dir.z).normalized()
+    player.velocity.x=direction.x*5.0
+    player.velocity.z=direction.z*5.0
+    player.move_and_slide()
 func _pan(delta:Vector2):
     if not camera_pivot or not camera:
         return
