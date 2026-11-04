@@ -1,36 +1,90 @@
 #!/usr/bin/env python3
 """Generate a Godot 4 project with all recovered Block Gun maps."""
-import json, pathlib, shutil
+import json, pathlib, shutil, re
+from PIL import Image, ImageDraw
 ROOT=pathlib.Path("scene_graph"); PROJECT=pathlib.Path("godot_project")
 MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
 names={"lvl_baghdad":"Baghdad","lvl_assault":"Assalto","lvl_middle_east":"Oriente Médio","lvl_resort":"Resort","lvl_forest":"Floresta","lvl_house":"Casa","lvl_india":"Índia","lvl_rome":"Roma","lvl_deluxe_fest":"Festival Deluxe"}
+def slice_obj(source:pathlib.Path,destination:pathlib.Path,first:int,count:int):
+    """Keep only the Unity static-batch submeshes assigned to one renderer."""
+    lines=source.read_text(encoding="utf-8",errors="replace").splitlines()
+    groups=[]; preamble=[]; current=None
+    for line in lines:
+        if line.startswith("g "):
+            if current is not None: groups.append(current)
+            current=[line]
+        elif current is None:
+            preamble.append(line)
+        else:
+            current.append(line)
+    if current is not None: groups.append(current)
+    # UnityPy writes a parent group followed by one OBJ group per submesh.
+    usable=[g for g in groups if any(x.startswith("f ") for x in g)]
+    if count<=0 or not usable:
+        shutil.copy2(source,destination); return False
+    chosen=usable[max(0,first):max(0,first)+count]
+    if not chosen:
+        shutil.copy2(source,destination); return False
+    destination.write_text("\n".join(preamble+[line for group in chosen for line in group])+"\n",encoding="utf-8")
+    return True
+
 def main():
     data_dir=PROJECT/"data"; meshes=PROJECT/"assets"/"meshes"; textures=PROJECT/"assets"/"textures"
     for p in (data_dir,meshes,textures): p.mkdir(parents=True,exist_ok=True)
+    # A real app icon prevents Godot's Android exporter from emitting the
+    # missing-project-icon error on every build.
+    icon=Image.new("RGBA",(512,512),(8,18,32,255)); draw=ImageDraw.Draw(icon)
+    draw.rounded_rectangle((36,36,476,476),radius=92,fill=(12,43,68,255),outline=(54,190,235,255),width=18)
+    draw.polygon([(125,365),(195,125),(270,125),(387,365),(302,365),(278,300),(213,300),(190,365)],fill=(230,245,250,255))
+    draw.rectangle((228,235,263,270),fill=(54,190,235,255))
+    icon.save(PROJECT/"icon.png")
     all_meshes=set(); all_textures=set(); catalog=[]
     for mapid in MAPS:
         path=ROOT/"maps"/(mapid+".json")
         if not path.exists(): raise SystemExit("Manifest missing: "+str(path))
         d=json.loads(path.read_text(encoding="utf-8")); copied=set(); tex=set(); missing=[]
         def walk(n):
-            for c in n.get("components",[]):
-                for r in c.get("references",[]):
-                    obj=r.get("exported_obj")
-                    if obj:
-                        src=ROOT/obj; dst=meshes/pathlib.Path(obj).name
-                        if src.exists():
-                            if dst.name not in all_meshes: shutil.copy2(src,dst); all_meshes.add(dst.name)
-                            copied.add(dst.name)
-                        else: missing.append(obj)
-                for m in c.get("material_resources",[]):
-                    for t in m.get("textures",[]):
-                        png=t.get("exported_png")
+            meshpath=""; colpath=""; mats=[]; batch=None
+            for comp in n.get("components",[]):
+                typ=comp.get("type","")
+                if typ in ("MeshFilter","SkinnedMeshRenderer"):
+                    for ref in comp.get("references",[]):
+                        if ref.get("field")=="m_Mesh": meshpath=ref.get("exported_obj") or meshpath
+                elif typ=="MeshCollider":
+                    for ref in comp.get("references",[]):
+                        if ref.get("field")=="m_Mesh": colpath=ref.get("exported_obj") or colpath
+                elif typ=="MeshRenderer":
+                    mats=comp.get("material_resources",[])
+                    batch=comp.get("static_batch_info")
+                for material in comp.get("material_resources",[]):
+                    for texture in material.get("textures",[]):
+                        png=texture.get("exported_png")
                         if png:
                             src=ROOT/png; dst=textures/pathlib.Path(png).name
                             if src.exists():
                                 if dst.name not in all_textures: shutil.copy2(src,dst); all_textures.add(dst.name)
                                 tex.add(dst.name)
                             else: missing.append(png)
+            def copy_mesh(obj,kind):
+                if not obj: return ""
+                src=ROOT/obj
+                if not src.exists():
+                    missing.append(obj); return ""
+                base=pathlib.Path(obj).name
+                first=int((batch or {}).get("first_sub_mesh") or 0)
+                count=int((batch or {}).get("sub_mesh_count") or 0)
+                if kind=="render" and count>0:
+                    tid=str(n.get("transform_path_id",n.get("name","node")))
+                    dst=meshes/f"{mapid}_{tid}_{base}"
+                    if not dst.exists(): slice_obj(src,dst,first,count)
+                else:
+                    dst=meshes/base
+                    if dst.name not in all_meshes: shutil.copy2(src,dst)
+                all_meshes.add(dst.name); copied.add(dst.name)
+                return dst.name
+            n["godot_render_obj"]=copy_mesh(meshpath or colpath,"render")
+            n["godot_collider_obj"]=copy_mesh(colpath,"collider")
+            n["godot_materials"]=mats
             for ch in n.get("children",[]): walk(ch)
         walk(d["root"])
         (data_dir/(mapid+".json")).write_text(json.dumps(d,ensure_ascii=False),encoding="utf-8")
@@ -39,6 +93,7 @@ def main():
     (PROJECT/"project.godot").write_text('''config_version=5
 [application]
 config/name="Block Gun - Mapas Recuperados"
+config/icon="res://icon.png"
 run/main_scene="res://main.tscn"
 [display]
 window/size/viewport_width=1280
