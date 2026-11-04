@@ -559,9 +559,12 @@ func _audit_all_maps():
         if mesh_count<expected_meshes or collider_count==0:
             failed=true
         await _start_walk_mode()
-        for frame in range(4):
+        var grounded=false
+        for frame in range(90):
             await get_tree().physics_frame
-        var grounded=is_instance_valid(player) and player.is_on_floor()
+            if is_instance_valid(player) and player.is_on_floor():
+                grounded=true
+                break
         var moved=false
         if is_instance_valid(player):
             var test_origin=player.global_position
@@ -668,15 +671,35 @@ func _start_walk_mode():
     player.global_position=camera_pivot.global_position+Vector3.UP*20.0
     await get_tree().physics_frame
     if is_instance_valid(player):
-        var ray_origin=camera_pivot.global_position+Vector3.UP*250.0
-        var ray_query=PhysicsRayQueryParameters3D.create(ray_origin,ray_origin-Vector3.UP*600.0)
-        ray_query.collision_mask=1
-        ray_query.exclude=[player.get_rid()]
-        var floor_hit=get_world_3d().direct_space_state.intersect_ray(ray_query)
-        if not floor_hit.is_empty():
-            player.global_position=floor_hit.position+Vector3.UP*0.08
+        var candidate_points=[camera_pivot.global_position]
+        # Probe from actual collider origins too. A map's visual bounding-box
+        # center can be over a gap or background mesh rather than its playable floor.
+        for collider_node in world.find_children("*","CollisionShape3D",true,false):
+            if collider_node is CollisionShape3D and collider_node.shape:
+                candidate_points.append(collider_node.global_position)
+        var best_found=false
+        var best_distance=INF
+        var best_floor=Vector3.ZERO
+        var offsets=[Vector3.ZERO,Vector3(4,0,0),Vector3(-4,0,0),Vector3(0,0,4),Vector3(0,0,-4),Vector3(8,0,0),Vector3(-8,0,0),Vector3(0,0,8),Vector3(0,0,-8)]
+        for base_point in candidate_points:
+            for offset in offsets:
+                var ray_origin=base_point+offset+Vector3.UP*250.0
+                var ray_query=PhysicsRayQueryParameters3D.create(ray_origin,ray_origin-Vector3.UP*600.0)
+                ray_query.collision_mask=1
+                ray_query.exclude=[player.get_rid()]
+                var floor_hit=get_world_3d().direct_space_state.intersect_ray(ray_query)
+                if not floor_hit.is_empty() and floor_hit.normal.y>0.58:
+                    var distance=Vector2(floor_hit.position.x-camera_pivot.global_position.x,floor_hit.position.z-camera_pivot.global_position.z).length()
+                    if distance<best_distance:
+                        best_distance=distance
+                        best_floor=floor_hit.position
+                        best_found=true
+        if best_found:
+            player.global_position=best_floor+Vector3.UP*0.03
+            print("WALK_SPAWN_SURFACE point=",best_floor," distance_from_center=",best_distance)
         else:
             player.global_position=camera_pivot.global_position+Vector3.UP*8.0
+            print("WALK_SPAWN_FALLBACK point=",player.global_position)
     walk_yaw=camera_pivot.rotation.y
     walk_pitch=deg_to_rad(-8.0)
     move_vector=Vector2.ZERO
