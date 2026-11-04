@@ -706,7 +706,7 @@ func _start_walk_mode():
                 candidate_transform.origin=floor_hit.position+Vector3.UP*0.06
                 var clear_directions=0
                 for direction in test_directions:
-                    if not player.test_move(candidate_transform,direction*1.25):
+                    if not player.test_move(candidate_transform,direction*4.5):
                         clear_directions+=1
                 var distance=Vector2(floor_hit.position.x-camera_pivot.global_position.x,floor_hit.position.z-camera_pivot.global_position.z).length()
                 if clear_directions>best_clearance or (clear_directions==best_clearance and distance<best_distance):
