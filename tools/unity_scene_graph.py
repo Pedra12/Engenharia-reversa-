@@ -96,16 +96,25 @@ def main():
        if not b: break
        dst.write(b)
    env=UnityPy.load(str(root)); objects=list(env.objects)
-   records={}; errors=[]; counts=collections.Counter()
+   records={}; errors=[]; counts=collections.Counter(); external_paths={}
    for i,o in enumerate(objects):
     pid=int(getattr(o,"path_id",i)); t=typ(o); src=source(o)
     try:
+     af=getattr(o,"assets_file",None)
+     exts=getattr(af,"externals",[]) or []
+     paths=[]
+     for ext in exts:
+      ep=getattr(ext,"path",None) or getattr(ext,"name",None) or str(ext)
+      paths.append(str(ep).replace("\\\\","/").rsplit("/",1)[-1])
+     external_paths[src]=paths
      d=o.read(); name=attr(d,"m_Name") or attr(d,"name") or ""
      r={"source":src,"path_id":pid,"type":t,"name":str(name)[:220],"refs":[]}
      counts[t]+=1
      for f in FIELDS.get(t,()):
       for p in refs(attr(d,f)):
-       r["refs"].append({"field":f,"file_id":p["file_id"],"path_id":p["path_id"]})
+       fid=p["file_id"]
+       target_source=src if fid==0 else (paths[fid-1] if 0 < fid <= len(paths) else "")
+       r["refs"].append({"field":f,"file_id":fid,"path_id":p["path_id"],"target_source":target_source})
      if t in TRANSFORMS:
       for f in ("m_LocalPosition","m_LocalRotation","m_LocalScale"): r[f]=val(attr(d,f))
       p=refs(attr(d,"m_Father")); r["parent"]=p[0]["path_id"] if p else 0
@@ -123,8 +132,8 @@ def main():
    edges=[]; hierarchy=[]; roots=[]
    for r in records.values():
     for p in r["refs"]:
-     target=index.get((r["source"],p["path_id"])) if p["file_id"]==0 else None
-     edges.append({"source_file":r["source"],"from_path_id":r["path_id"],"from_type":r["type"],"from_name":r["name"],"field":p["field"],"file_id":p["file_id"],"to_path_id":p["path_id"],"to_type":target["type"] if target else "UNRESOLVED_OR_EXTERNAL","to_name":target["name"] if target else ""})
+     target=index.get((p.get("target_source") or r["source"],p["path_id"]))
+     edges.append({"source_file":r["source"],"from_path_id":r["path_id"],"from_type":r["type"],"from_name":r["name"],"field":p["field"],"file_id":p["file_id"],"to_path_id":p["path_id"],"target_source":p.get("target_source",""),"to_type":target["type"] if target else "UNRESOLVED_OR_EXTERNAL","to_name":target["name"] if target else ""})
     if r["type"] in TRANSFORMS:
      go=index.get((r["source"],r.get("game_object")))
      parent=index.get((r["source"],r.get("parent"))) if r.get("parent") else None
@@ -148,7 +157,7 @@ def main():
    summary={"serialized_objects_read":len(records),"types":dict(counts.most_common()),"reference_edges":len(edges),"transform_objects":len(hierarchy),"root_transform_candidates":len(roots),"errors":len(errors),"split_families":len(groups),"split_chunks":sum(map(len,groups.values())),"source_files":sorted({r["source"] for r in records.values()})}
    (OUT/"UNITY_SCENE_GRAPH.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
    (OUT/"UNITY_SCENE_GRAPH_ERRORS.json").write_text(json.dumps(errors[:5000],ensure_ascii=False,indent=2),encoding="utf-8")
-   lines=["# Segunda passagem: grafo relacional Unity","",f"- Objetos lidos: **{len(records)}**",f"- Tipos: **{len(counts)}**",f"- Referências PPtr: **{len(edges)}**",f"- Transform/RectTransform: **{len(hierarchy)}**",f"- Candidatos a raízes: **{len(roots)}**",f"- Erros de leitura: **{len(errors)}**",f"- Famílias split: **{len(groups)}**",f"- Partes split: **{summary['split_chunks']}**","","## Arquivos","- UNITY_RELATIONAL_OBJECTS.csv: objetos, IDs, origem, componentes e referências.","- UNITY_REFERENCE_EDGES.csv: relações entre objetos.","- UNITY_TRANSFORM_HIERARCHY.csv: pai/filhos e transformações locais.","- UNITY_SCENE_ROOT_CANDIDATES.csv: raízes candidatas.","- UNITY_SCENE_GRAPH.json: resumo e arquivos de origem.","- UNITY_SCENE_GRAPH_ERRORS.json: amostra de erros.","","## Limitações","- Referências externas ou com file_id diferente de zero podem permanecer sem resolução.","- Uma raiz de Transform não prova que seja uma cena jogável.","- A reconstrução exige validar materiais, colisões, recursos externos e geometria.","- Este relatório não converte cenas Unity automaticamente para Godot."]
+   lines=["# Segunda passagem: grafo relacional Unity","",f"- Objetos lidos: **{len(records)}**",f"- Tipos: **{len(counts)}**",f"- Referências PPtr: **{len(edges)}**",f"- Transform/RectTransform: **{len(hierarchy)}**",f"- Candidatos a raízes: **{len(roots)}**",f"- Erros de leitura: **{len(errors)}**",f"- Famílias split: **{len(groups)}**",f"- Partes split: **{summary['split_chunks']}**","","## Arquivos","- UNITY_RELATIONAL_OBJECTS.csv: objetos, IDs, origem, componentes e referências.","- UNITY_REFERENCE_EDGES.csv: relações entre objetos, incluindo o arquivo externo de destino quando resolvido.","- UNITY_TRANSFORM_HIERARCHY.csv: pai/filhos e transformações locais.","- UNITY_SCENE_ROOT_CANDIDATES.csv: raízes candidatas.","- UNITY_SCENE_GRAPH.json: resumo e arquivos de origem.","- UNITY_SCENE_GRAPH_ERRORS.json: amostra de erros.","","## Limitações","- Referências PPtr externas são resolvidas usando a tabela de arquivos externos do SerializedFile quando disponível.","- Uma raiz de Transform não prova que seja uma cena jogável.","- A reconstrução exige validar materiais, colisões, recursos externos e geometria.","- Este relatório não converte cenas Unity automaticamente para Godot."]
    (OUT/"UNITY_SCENE_GRAPH.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
    print("\n".join(lines))
    print("TYPE_COUNTS",json.dumps(counts.most_common(),ensure_ascii=False))
