@@ -16,7 +16,7 @@ def obj_stats(path):
     elif line.startswith("f "): fc+=1
  except OSError: return {"missing":True,"vertices":0,"faces":0}
  return {"missing":False,"vertices":v,"faces":fc}
-def obj_surface_features(path):
+def obj_surface_features(path,scale_y=1.0):
  p=GRAPH/path
  if not p.exists(): return {"missing":True,"bounds":None,"horizontal_levels":[],"stair_geometry_candidate":False}
  vertices=[]; faces=[]
@@ -35,6 +35,7 @@ def obj_surface_features(path):
  except OSError: return {"missing":True,"bounds":None,"horizontal_levels":[],"stair_geometry_candidate":False}
  if not vertices: return {"missing":False,"bounds":None,"horizontal_levels":[],"stair_geometry_candidate":False}
  bounds={axis:[min(v[i] for v in vertices),max(v[i] for v in vertices)] for i,axis in enumerate(("x","y","z"))}
+ bounds["y"]=[bounds["y"][0]*abs(scale_y),bounds["y"][1]*abs(scale_y)]
  levels=collections.Counter()
  for ids in faces:
   if any(i<0 or i>=len(vertices) for i in ids): continue
@@ -43,11 +44,11 @@ def obj_surface_features(path):
   nx=uy*vz-uz*vy; ny=uz*vx-ux*vz; nz=ux*vy-uy*vx
   norm=(nx*nx+ny*ny+nz*nz)**0.5
   if norm>1e-9 and abs(ny)/norm>=0.96:
-   levels[round((a[1]+b[1]+c[1])/3,2)]+=1
+   levels[round(((a[1]+b[1]+c[1])/3)*abs(scale_y),3)]+=1
  tread_levels=sorted((y,n) for y,n in levels.items() if n>=3)
  sequence=[]; best=[]
  for item in tread_levels:
-  if sequence and 0.06 <= item[0]-sequence[-1][0] <= 0.36: sequence.append(item)
+  if sequence and 0.07 <= item[0]-sequence[-1][0] <= 0.30: sequence.append(item)
   else:
    if len(sequence)>len(best): best=sequence
    sequence=[item]
@@ -68,7 +69,9 @@ def main():
      obj=ref.get("exported_obj")
      if obj:
       meshrefs.add(obj)
-      if ref.get("field")=="m_Mesh" and typ=="MeshCollider": colliders.append({"node":name,"mesh":obj,"stats":obj_stats(obj),"surface_features":obj_surface_features(obj)})
+      if ref.get("field")=="m_Mesh" and typ=="MeshCollider":
+       scale_y=float((n.get("scale") or {}).get("y",1.0) or 1.0)
+       colliders.append({"node":name,"mesh":obj,"scale_y":scale_y,"stats":obj_stats(obj),"surface_features":obj_surface_features(obj,scale_y)})
       if not (GRAPH/obj).exists(): missing.append(obj)
      png=ref.get("exported_png")
      if png:
@@ -87,7 +90,7 @@ def main():
   level=d.get("source_level","")
   level_meshes=sorted(str(p.relative_to(GRAPH)) for p in (GRAPH/"exported_meshes").glob(level+"__*.obj")) if (GRAPH/"exported_meshes").exists() else []
   for obj in level_meshes: geometry[obj]=obj_stats(obj)
-  report={"map":f.stem,"unity_level":level,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
+  report={"map":f.stem,"unity_level":level,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"scale_y":c["scale_y"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
   reports.append(report); global_missing+=report["missing_exports"]
   (OUT/(f.stem+"_QUALITY_AUDIT.json")).write_text(json.dumps(report,indent=2,ensure_ascii=False))
   print("MAP_QUALITY_AUDIT",json.dumps({k:v for k,v in report.items() if not isinstance(v,(list,dict))},ensure_ascii=False))
