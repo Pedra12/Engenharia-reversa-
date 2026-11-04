@@ -433,7 +433,13 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     # Treating trees, water, roofs and static-batched scenery as solid walls was
     # the main source of blocked movement and impossible house entrances.
     var collision_mesh:Mesh=null
-    if colpath!="":
+    # Static-batched renderer geometry is exported as a sliced world-space mesh.
+    # A separate Unity MeshCollider reference can still point to the unsliced
+    # combined source mesh; using it with the GameObject transform traps players.
+    var static_batched_collision=bool(d.get("godot_static_batched",false)) and render_mesh!=null and colpath!=""
+    if static_batched_collision:
+        collision_mesh=render_mesh
+    elif colpath!="":
         collision_mesh=load("res://assets/meshes/"+colpath.get_file()) as Mesh
     var object_name=String(d.get("name","")).to_lower()
     if collision_mesh==null and render_mesh and colpath=="":
@@ -468,7 +474,7 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
                     correction[axis]=visual_size[axis]/collider_size[axis]
             cs.scale=correction
         body.add_child(cs)
-        var collider_parent:Node3D=parent if bool(d.get("godot_static_batched_collider",false)) else n
+        var collider_parent:Node3D=parent if static_batched_collision else n
         collider_parent.add_child(body)
     for ch in d.get("children",[]):
         _build_node(ch,n,map_id)
