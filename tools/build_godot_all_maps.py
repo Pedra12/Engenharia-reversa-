@@ -476,6 +476,13 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
         body.add_child(cs)
         var collider_parent:Node3D=parent if static_batched_collision else n
         collider_parent.add_child(body)
+        if not static_batched_collision:
+            # UnityPy exports local MeshCollider vertices in the original local
+            # basis, while Unity static-batch render vertices are already in
+            # scene space with the X translation reflected for Godot's basis.
+            # Mirror the node translation only (not the mesh vertices) so the
+            # original collision surface lines up with its recovered renderer.
+            body.position.x=-2.0*n.position.x
     for ch in d.get("children",[]):
         _build_node(ch,n,map_id)
 func _ref(c:Dictionary,key:String)->String:
