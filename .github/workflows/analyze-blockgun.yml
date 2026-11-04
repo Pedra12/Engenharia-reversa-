@@ -64,7 +64,16 @@ jobs:
       - name: Configure Android SDK
         uses: android-actions/setup-android@v3
       - name: Install Android platform packages
-        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME" -type f -name sdkmanager -print -quit)"
+          fi
+          test -n "$SDKMANAGER" -a -x "$SDKMANAGER"
+          echo "Using sdkmanager: $SDKMANAGER"
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Install Godot Android export templates
         shell: bash
         run: |
