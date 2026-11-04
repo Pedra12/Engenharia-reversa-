@@ -620,7 +620,7 @@ func _audit_all_maps():
             var stair_node=world.find_child("umsh_resort_s2",true,false) as Node3D
             if is_instance_valid(stair_node):
                 # Geometry audit found a seven-tread staircase in this original collision mesh.
-                var lower_tread=Vector3(8.3695,-11.04,10.4778)
+                var lower_tread=Vector3(-2.297,-11.04,-17.856)
                 var stair_query=PhysicsRayQueryParameters3D.create(lower_tread+Vector3.UP*2.0,lower_tread-Vector3.UP*2.0)
                 stair_query.collision_mask=1
                 stair_query.exclude=[player.get_rid()]
