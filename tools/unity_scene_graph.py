@@ -188,7 +188,7 @@ def main():
       if ref["field"]=="m_Mesh":
        entry["exported_obj"]=mesh_exports.get((target_source,ref["path_id"]))
       info["references"].append(entry)
-      if c["type"]=="MeshRenderer" and ref["field"]=="m_Materials":
+      if c["type"] in ("MeshRenderer","SkinnedMeshRenderer") and ref["field"]=="m_Materials":
        material=index.get((target_source,ref["path_id"]))
        if material:
         info.setdefault("material_resources",[]).append({
