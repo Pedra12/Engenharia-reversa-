@@ -75,7 +75,7 @@ def _cluster_xz(points,eps=1.2,min_count=3):
    found.append((sum(points[i][0] for i in group)/len(group),sum(points[i][1] for i in group)/len(group)))
  return found
 
-def stair_route_candidates(mesh_path,scale,position,node_name):
+def stair_route_candidates(mesh_path,scale,position,node_name,tread_sequence):
  p=GRAPH/mesh_path
  if not p.exists(): return []
  sx,sy,sz=(float(scale.get(k,1.0) or 1.0) for k in ("x","y","z"))
@@ -105,11 +105,16 @@ def stair_route_candidates(mesh_path,scale,position,node_name):
   norm=(nx*nx+ny*ny+nz*nz)**0.5
   if norm<1e-9 or abs(ny)/norm<0.96: continue
   y=round((a[1]+b[1]+c[1])/3,3)
+  if not any(abs(y-float(t.get("y",0.0)))<=0.004 for t in tread_sequence): continue
   levels[y].append(((a[0]+b[0]+c[0])/3,(a[2]+b[2]+c[2])/3))
  nodes=[]
- for y,points in sorted(levels.items()):
-  for xz in _cluster_xz(points):
-   nodes.append((y,xz))
+ for tread in tread_sequence:
+  target_y=float(tread.get("y",0.0))
+  matching=[(y,points) for y,points in levels.items() if abs(y-target_y)<=0.004]
+  for y,points in matching:
+   for xz in _cluster_xz(points,eps=1.2,min_count=2):
+    nodes.append((y,xz))
+ nodes.sort(key=lambda item:item[0])
  if len(nodes)<3: return []
  best_paths=[[i] for i in range(len(nodes))]
  for j,(yj,xj) in enumerate(nodes):
@@ -167,7 +172,7 @@ def main():
   for obj in level_meshes: geometry[obj]=obj_stats(obj)
   stair_routes=[]
   for c in colliders:
-   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"]))
+   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"],c["surface_features"]["candidate_tread_sequence"]))
   stair_routes.sort(key=lambda r:(r["steps"],r["rise"],-abs(r["horizontal_distance"]-1.0)),reverse=True)
   report={"map":f.stem,"unity_level":level,"stair_route_candidates":stair_routes,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"scale_y":c["scale_y"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
   reports.append(report); global_missing+=report["missing_exports"]
