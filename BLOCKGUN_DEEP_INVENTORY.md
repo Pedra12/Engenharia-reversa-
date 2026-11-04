@@ -1,0 +1,245 @@
+# Inventário recursivo completo: Block Gun 3D 2.0.3
+
+- Arquivos indexados em todas as camadas: **72,851**
+- Arquivos na raiz do ZIP: **72,850**
+- Membros internos adicionados: **1**
+- Arquivos compactados/pacotes identificados: **1**
+- Profundidade máxima verificada: **10**
+- Dados lidos de conteúdo aninhado: **31,951,138 bytes**
+- ZIP original: **416,299,139 bytes**
+
+## Categorias
+- Código/scripts: 57,419
+- Outros: 7,176
+- Dados/configuração: 5,182
+- Texturas/imagens: 2,072
+- Modelos 3D: 652
+- Bibliotecas: 187
+- Áudio: 152
+- Fontes: 7
+- Pacotes/compactados: 3
+- Vídeo: 1
+
+## Extensões
+- .smali: 27,791
+- .java: 27,313
+- .json: 4,426
+- .bin: 4,420
+- [sem extensão]: 2,328
+- .cs: 2,218
+- .png: 2,072
+- .xml: 699
+- .obj: 652
+- .wav: 152
+- .dll: 143
+- .shader: 94
+- .resource: 80
+- .kotlin_module: 68
+- .version: 64
+- .proto: 47
+- .so: 44
+- .properties: 42
+- .split1: 21
+- .split0: 21
+- .split2: 20
+- .split3: 19
+- .split4: 14
+- .txt: 10
+- .split5: 10
+- .split6: 8
+- .kotlin_builtins: 7
+- .ttf: 6
+- .split7: 5
+- .split8: 4
+- .dat: 4
+- .log: 3
+- .html: 2
+- .split13: 2
+- .split12: 2
+- .split11: 2
+- .split14: 2
+- .split10: 2
+- .split16: 2
+- .split15: 2
+- .split9: 2
+- .bundle: 2
+- .js: 2
+- .h: 1
+- .csproj: 1
+- .otf: 1
+- .gz: 1
+- .build_fingerprint: 1
+- .maindispatcherfactory: 1
+- .builtinsloader: 1
+- .coroutineexceptionhandler: 1
+- .externaloverridabilitycondition: 1
+- .pro: 1
+- .mp4: 1
+- .plist: 1
+- .split23: 1
+- .split17: 1
+- .split21: 1
+- .split26: 1
+- .split18: 1
+- .split25: 1
+- .split19: 1
+- .config: 1
+- .split24: 1
+- .split22: 1
+- .split20: 1
+- .hash: 1
+
+## Arquivos compactados detectados
+- resources/okhttp3/internal/publicsuffix/publicsuffixes.gz | GZIP | nível 1 | 1 entradas | 37,730 bytes
+
+## Pastas com mais arquivos
+- smali/com/google/android/gms/internal/ads: 4,428
+- sources/com/google/android/gms/internal/ads: 4,187
+- unity/assets/serialized-behaviours/0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2: 2,944
+- resources/assets/bin/Data: 2,553
+- smali/com/facebook/ads/redexgen/X: 2,118
+- sources/com/facebook/ads/redexgen/X: 2,081
+- unity/scripts/csharp: 1,027
+- unity/assets/serialized-behaviours/1033_0001_6f91eafe35b19f241a621e95714a2985.assets: 782
+- unity/assets/sprites/0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2: 727
+- smali/com/google/android/gms/internal/measurement: 478
+- sources/com/google/android/gms/internal/measurement: 466
+- smali/com/chartboost/sdk/impl: 398
+- sources/com/chartboost/sdk/impl: 398
+- smali/com/google/android/gms/internal/drive: 374
+- smali/com/inmobi/media: 373
+- sources/com/inmobi/media: 373
+- sources/com/google/android/gms/internal/drive: 369
+- unity/assets/serialized-behaviours/1159_0001_7c78b588b2e1f7c4a86ca4a985cf6e4a.assets: 342
+- unity/assets/meshes/0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2: 328
+- smali/com/my/target: 310
+- sources/com/my/target: 310
+- resources/res/drawable: 263
+- resources/res/drawable-xhdpi: 259
+- smali/com/google/android/gms/measurement/internal: 231
+- resources/res/drawable-hdpi: 229
+- sources/com/google/android/gms/measurement/internal: 224
+- smali/com/google/android/gms/internal/auth: 219
+- smali/com/google/android/gms/internal/nearby: 217
+- smali/com/google/common/collect: 214
+- sources/com/google/common/collect: 214
+- sources/com/google/android/gms/internal/auth: 209
+- smali/com/google/protobuf: 207
+- sources/com/google/protobuf: 207
+- sources/com/google/android/gms/internal/nearby: 206
+- smali/com/google/android/gms/internal/play_billing: 178
+- sources/com/google/android/gms/internal/play_billing: 168
+- smali/com/google/android/gms/ads/internal/client: 153
+- smali/androidx/datastore/preferences/protobuf: 150
+- sources/androidx/datastore/preferences/protobuf: 150
+- sources/com/google/android/gms/ads/internal/client: 150
+- unity/scripts/il2cpp/DummyDll: 144
+- resources/res/drawable-mdpi: 143
+- resources/res/layout: 140
+- smali/kotlinx/coroutines/flow: 138
+- sources/kotlinx/coroutines/flow: 138
+- smali/com/google/android/gms/common/api/internal: 137
+- smali/kotlinx/coroutines: 136
+- sources/kotlinx/coroutines: 136
+- resources/META-INF: 133
+- sources/com/google/android/gms/common/api/internal: 128
+- unity/scripts/csharp/Hazmob.UI: 127
+- smali/gateway/v1: 114
+- sources/gateway/v1: 114
+- smali/kotlinx/serialization/internal: 107
+- sources/kotlinx/serialization/internal: 107
+- smali/com/google/android/gms/common/internal: 106
+- sources/com/google/android/gms/common/internal: 101
+- smali/com/google/android/gms/internal/consent_sdk: 98
+- smali/kotlin: 96
+- sources/kotlin: 96
+- sources/com/google/android/gms/internal/consent_sdk: 90
+- smali/com/android/billingclient/api: 89
+- unity/assets/serialized-behaviours/0849_0001_5c7bcd121d3a6c042a719da08a1ef6cb.assets: 88
+- unity/scripts/csharp/PlayFab: 84
+- smali/kotlin/collections: 83
+- smali/com/google/android/gms/internal/games_v2: 83
+- sources/kotlin/collections: 83
+- smali/com/google/android/gms/nearby/messages/internal: 82
+- sources/com/google/android/gms/nearby/messages/internal: 81
+- smali/com/google/android/gms/fido/fido2/api/common: 80
+- sources/com/google/android/gms/fido/fido2/api/common: 80
+- sources/com/google/android/gms/internal/games_v2: 80
+- smali/com/google/common/util/concurrent: 79
+- sources/com/google/common/util/concurrent: 79
+- smali/com/fyber/inneractive/sdk/protobuf: 77
+- smali/com/adcolony/sdk: 77
+- sources/com/fyber/inneractive/sdk/protobuf: 77
+- sources/com/adcolony/sdk: 77
+- unity/assets/textures/0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2: 76
+- smali/kotlin/jvm/internal: 75
+- sources/kotlin/jvm/internal: 75
+- unity/assets/audio/0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2: 74
+- smali/androidx/appcompat/widget: 74
+- sources/androidx/appcompat/widget: 74
+- unity/assets/serialized-behaviours/0794_0001_572f5e09e581fba4d8684369af7660c5.assets: 72
+- unity/assets/serialized-behaviours/1744_0001_bfe1504c311c66f4482e6ea44734bfed.assets: 72
+- smali/com/unity3d/mediation: 72
+- sources/com/unity3d/mediation: 72
+- smali/androidx/lifecycle: 71
+- smali/com/vungle/ads: 71
+- sources/androidx/lifecycle: 71
+- sources/com/vungle/ads: 71
+- resources/res/drawable-ldpi: 71
+- smali/com/adjust/sdk: 70
+- smali/com/ironsource/mediationsdk: 70
+- sources/com/adjust/sdk: 70
+- sources/com/ironsource/mediationsdk: 70
+- resources/res/drawable-anydpi: 69
+- unity/assets/serialized-behaviours/2004_0001_daa46a58178a6ad41ae1ddc2dc7f856d.assets: 68
+- smali/com/google/android/gms/internal/fido: 68
+
+## Erros ou limites encontrados
+- Nenhuma falha de leitura registrada.
+
+## Resumo do relatório de extração Unity
+- unity_versions: lista com 2 itens
+- failed_objects: 9
+- failures: lista com 9 itens
+- failures[0].type: Shader
+- failures[0].serialized_file: 0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2
+- failures[0].path_id: -8015457887526078469
+- failures[0].error: error: unpack_from requires a buffer of at least 1612 bytes for unpacking 4 bytes at offset 1608 (actual buffer size is 1608)
+- failures[1].type: Shader
+- failures[1].serialized_file: 0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2
+- failures[1].path_id: -4055751637662985151
+- failures[1].error: error: unpack_from requires a buffer of at least 1248712 bytes for unpacking 4 bytes at offset 1248708 (actual buffer size is 1248708)
+- failures[2].type: Shader
+- failures[2].serialized_file: 0479_0001_35e778fba8b2b49a198d8d7cfced67eb.assets
+- failures[2].path_id: 1
+- failures[2].error: error: unpack_from requires a buffer of at least 1700 bytes for unpacking 4 bytes at offset 1696 (actual buffer size is 1696)
+- failures[3].type: Shader
+- failures[3].serialized_file: 1048_0001_703dd19f506cb2c4e9c70711015555b2.assets
+- failures[3].path_id: 1
+- failures[3].error: error: unpack_from requires a buffer of at least 1872 bytes for unpacking 4 bytes at offset 1868 (actual buffer size is 1868)
+- failures[4].type: Shader
+- failures[4].serialized_file: 1827_0001_c84d57d423a2042eb92da86f9fa670a3.assets
+- failures[4].path_id: 1
+- failures[4].error: error: unpack_from requires a buffer of at least 1696 bytes for unpacking 4 bytes at offset 1692 (actual buffer size is 1692)
+- failures[5].type: Shader
+- failures[5].serialized_file: 1446_0001_unity_builtin_extra.assets
+- failures[5].path_id: 19
+- failures[5].error: error: unpack_from requires a buffer of at least 1612 bytes for unpacking 4 bytes at offset 1608 (actual buffer size is 1608)
+- failures[6].type: Shader
+- failures[6].serialized_file: 1446_0001_unity_builtin_extra.assets
+- failures[6].path_id: 4800000
+- failures[6].error: error: unpack_from requires a buffer of at least 1612 bytes for unpacking 4 bytes at offset 1608 (actual buffer size is 1608)
+- failures[7].type: Shader
+- failures[7].serialized_file: 0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2
+- failures[7].path_id: 3163150583322021543
+- failures[7].error: error: unpack_from requires a buffer of at least 523712 bytes for unpacking 4 bytes at offset 523708 (actual buffer size is 523708)
+- failures[8].type: Shader
+- failures[8].serialized_file: 0002_0001_CAB-9285b8edc3ded9839fab445d0b0ee7e2
+- failures[8].path_id: 3819691914921817934
+- failures[8].error: error: unpack_from requires a buffer of at least 1612 bytes for unpacking 4 bytes at offset 1608 (actual buffer size is 1608)
+- input_failures: lista com 0 itens
+
+## Arquivos de dados completos
+- INVENTORY_ALL_FILES.csv.gz: índice de todos os caminhos, tamanhos, categorias e níveis.
+- ARCHIVES_RECURSIVE.csv.gz: relação de pacotes e arquivos compactados encontrados.
+- UNITY_EXTRACTION_REPORT.json: relatório bruto de falhas de exportação Unity, se presente.
