@@ -65,6 +65,8 @@ jobs:
       - name: Build relational Unity scene graph
         if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_scene_graph.py
+      - name: Install image library for map icon generation
+        run: python3 -m pip install --disable-pip-version-check Pillow
       - name: Generate Godot project with all recovered maps
         run: python3 tools/build_godot_all_maps.py
       - name: Audit every map assets, interiors and stair candidates
