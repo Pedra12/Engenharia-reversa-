@@ -36,13 +36,33 @@ jobs:
           curl -fL --retry 3 --retry-delay 2 "$URL" -o blockgun.zip
           echo "Downloaded bytes: $(stat -c%s blockgun.zip)"
           sha256sum blockgun.zip
+      - name: Compute extraction cache key
+        id: extraction-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          FINGERPRINT="$(sha256sum blockgun.zip tools/deep_inventory.py tools/unity_asset_audit.py tools/unity_scene_graph.py | sha256sum | cut -d ' ' -f1)"
+          echo "fingerprint=$FINGERPRINT" >> "$GITHUB_OUTPUT"
+      - name: Restore extracted Unity assets and scene graph
+        id: extracted-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            inventory_out/
+            unity_audit/
+            scene_graph/
+          key: blockgun-extraction-${{ steps.extraction-key.outputs.fingerprint }}-v1
       - name: Run recursive inventory
+        if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/deep_inventory.py
       - name: Install Unity extraction libraries
+        if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 -m pip install --disable-pip-version-check UnityPy Pillow
       - name: Extract and catalog Unity assets
+        if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_asset_audit.py
       - name: Build relational Unity scene graph
+        if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_scene_graph.py
       - name: Generate Godot project with all recovered maps
         run: python3 tools/build_godot_all_maps.py
