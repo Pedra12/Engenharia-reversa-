@@ -112,7 +112,7 @@ def main():
     with open(OUT/"UNITY_OBJECT_CATALOG.csv","w",newline="",encoding="utf-8") as f:
         fields=sorted({k for r in rows for k in r}); w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
     summary={"input_zip_bytes":ARCHIVE.stat().st_size,"split_families_reassembled":len(assembled),
-      "split_sources":sum(len(x[1]) for x in assembled),"bundle_files":len(bundle_names),
+      "split_sources":sum(x[2] for x in assembled),"bundle_files":len(bundle_names),
       "objects_catalogued":len(rows),"types":dict(counts.most_common()),
       "exported_files":sum(1 for r in rows if r.get("exported")),"errors_count":len(errors),"errors":errors[:500]}
     (OUT/"UNITY_ASSET_AUDIT.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
