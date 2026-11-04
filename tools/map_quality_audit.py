@@ -56,7 +56,7 @@ def obj_surface_features(path,scale_y=1.0):
  return {"missing":False,"bounds":bounds,"horizontal_levels":[{"y":y,"triangles":n} for y,n in sorted(levels.items(),key=lambda q:-q[1])[:30]],"stair_geometry_candidate":len(best)>=3,"candidate_tread_sequence":[{"y":y,"triangles":n} for y,n in best] if len(best)>=3 else []}
 
 
-def _cluster_xz(points,eps=2.0,min_count=1):
+def _cluster_xz(points,eps=1.2,min_count=3):
  cell=eps; buckets=collections.defaultdict(list)
  for i,p in enumerate(points): buckets[(int(p[0]//cell),int(p[1]//cell))].append(i)
  unseen=set(range(len(points))); found=[]
@@ -75,7 +75,7 @@ def _cluster_xz(points,eps=2.0,min_count=1):
    found.append((sum(points[i][0] for i in group)/len(group),sum(points[i][1] for i in group)/len(group)))
  return found
 
-def stair_route_candidates(mesh_path,scale,position,node_name,tread_sequence):
+def stair_route_candidates(mesh_path,scale,position,node_name):
  p=GRAPH/mesh_path
  if not p.exists(): return []
  sx,sy,sz=(float(scale.get(k,1.0) or 1.0) for k in ("x","y","z"))
@@ -105,23 +105,18 @@ def stair_route_candidates(mesh_path,scale,position,node_name,tread_sequence):
   norm=(nx*nx+ny*ny+nz*nz)**0.5
   if norm<1e-9 or abs(ny)/norm<0.96: continue
   y=round((a[1]+b[1]+c[1])/3,3)
-  if not any(abs(y-float(t.get("y",0.0)))<=0.02 for t in tread_sequence): continue
   levels[y].append(((a[0]+b[0]+c[0])/3,(a[2]+b[2]+c[2])/3))
  nodes=[]
- for tread in tread_sequence:
-  target_y=float(tread.get("y",0.0))
-  matching=[(y,points) for y,points in levels.items() if abs(y-target_y)<=0.004]
-  for y,points in matching:
-   for xz in _cluster_xz(points,eps=2.0,min_count=1):
-    nodes.append((y,xz))
- nodes.sort(key=lambda item:item[0])
+ for y,points in sorted(levels.items()):
+  for xz in _cluster_xz(points):
+   nodes.append((y,xz))
  if len(nodes)<3: return []
  best_paths=[[i] for i in range(len(nodes))]
  for j,(yj,xj) in enumerate(nodes):
   for i in range(j):
    yi,xi=nodes[i]; dy=yj-yi
-   if dy<0.05 or dy>0.38: continue
-   if (xj[0]-xi[0])**2+(xj[1]-xi[1])**2>2.5**2: continue
+   if dy<0.07 or dy>0.32: continue
+   if (xj[0]-xi[0])**2+(xj[1]-xi[1])**2>1.6**2: continue
    if len(best_paths[i])+1>len(best_paths[j]):
     best_paths[j]=best_paths[i]+[j]
  best_path=max(best_paths,key=len)
@@ -132,7 +127,7 @@ def stair_route_candidates(mesh_path,scale,position,node_name,tread_sequence):
  start=[x0-px,y0+py,z0+pz]; end=[x1-px,y1+py,z1+pz]
  distance=((end[0]-start[0])**2+(end[2]-start[2])**2)**0.5
  rise=end[1]-start[1]
- if not (0.10<=distance<=3.0 and 0.10<=rise<=1.8): return []
+ if not (0.18<=distance<=2.0 and 0.15<=rise<=1.6): return []
  return [{"node":node_name,"steps":len(best_path),"start":start,"end":end,"horizontal_distance":distance,"rise":rise}]
 
 def main():
@@ -172,7 +167,7 @@ def main():
   for obj in level_meshes: geometry[obj]=obj_stats(obj)
   stair_routes=[]
   for c in colliders:
-   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"],c["surface_features"]["candidate_tread_sequence"]))
+   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"]))
   stair_routes.sort(key=lambda r:(r["steps"],r["rise"],-abs(r["horizontal_distance"]-1.0)),reverse=True)
   report={"map":f.stem,"unity_level":level,"stair_route_candidates":stair_routes,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"scale_y":c["scale_y"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
   reports.append(report); global_missing+=report["missing_exports"]
