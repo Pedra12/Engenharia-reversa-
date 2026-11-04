@@ -54,7 +54,11 @@ jobs:
           mkdir -p /tmp/godot
           unzip -q /tmp/godot.zip -d /tmp/godot
           chmod +x /tmp/godot/Godot_v4.4.1-stable_linux.x86_64
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot_project --import --quit
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot_project --import --quit 2>&1 | tee /tmp/godot-import.log
+          if grep -Eq "Failed loading resource|SCRIPT ERROR:|Parse Error:" /tmp/godot-import.log; then
+            echo "One or more project resources failed to import."
+            exit 1
+          fi
           set +e
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project --quit-after 8 2>&1 | tee /tmp/godot-runtime.log
           GODOT_STATUS=${PIPESTATUS[0]}
@@ -63,7 +67,7 @@ jobs:
             echo "Godot runtime exited with status $GODOT_STATUS"
             exit "$GODOT_STATUS"
           fi
-          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script" /tmp/godot-runtime.log; then
+          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script|Failed loading resource" /tmp/godot-runtime.log; then
             echo "Godot script errors detected; refusing to export a broken APK."
             exit 1
           fi
@@ -78,7 +82,7 @@ jobs:
             echo "One or more recovered maps failed the scene/collision audit."
             exit "$MAP_AUDIT_STATUS"
           fi
-          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script" /tmp/map-audit.log; then
+          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script|Failed loading resource" /tmp/map-audit.log; then
             echo "Godot script errors detected during map audit."
             exit 1
           fi
@@ -137,7 +141,11 @@ jobs:
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
           export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
           export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk"
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk" 2>&1 | tee /tmp/android-export.log
+          if grep -Eq "No project icon specified|Failed loading resource|SCRIPT ERROR:|Parse Error:" /tmp/android-export.log; then
+            echo "Android export reported a fatal resource or icon warning."
+            exit 1
+          fi
           test -s godot_project/build/BlockGunMapsPreview.apk
           ls -lh godot_project/build/BlockGunMapsPreview.apk
       - name: Upload Android preview APK
