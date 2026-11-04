@@ -176,6 +176,7 @@ def main():
   if godot_manifest.exists():
    godot_data=json.loads(godot_manifest.read_text())
    godot_data["stair_route_candidates"]=stair_routes
+   godot_data["stair_geometry_candidates"]=report["stair_geometry_candidates"]
    godot_manifest.write_text(json.dumps(godot_data,ensure_ascii=False),encoding="utf-8")
   print("MAP_QUALITY_AUDIT",json.dumps({k:v for k,v in report.items() if not isinstance(v,(list,dict))},ensure_ascii=False))
  summary={"maps":len(reports),"missing_asset_references":global_missing,"results":reports}
