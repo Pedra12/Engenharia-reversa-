@@ -81,7 +81,99 @@
 - .split20: 1
 - .hash: 1
 
-## Arquivos relevantes encontrados
+## Estrutura Unity
+- Arquivos dentro de unity/: 13335
+- unity/assets/serialized-behaviours: 8820 arquivos
+- unity/scripts/csharp: 2219 arquivos
+- unity/assets/sprites: 1148 arquivos
+- unity/assets/meshes: 652 arquivos
+- unity/assets/audio: 152 arquivos
+- unity/scripts/il2cpp: 149 arquivos
+- unity/assets/shaders: 94 arquivos
+- unity/assets/textures: 76 arquivos
+- unity/assets/unparsed: 9 arquivos
+- unity/assets/text: 6 arquivos
+- unity/assets/fonts: 6 arquivos
+- unity/README.txt: 1 arquivos
+- unity/assets/_report.json: 1 arquivos
+- unity/assets/_extraction.log: 1 arquivos
+- unity/assets/script-types.json: 1 arquivos
+
+## Arquivos-chave do código C#
+### unity/scripts/csharp/PlayerController.cs
+- Tamanho: 5,862 bytes
+- Classes/tipos: PlayerController
+- Métodos: HKCJBIEMMJI, BJIKAGHMNKA, IBFMGJLAHHB, NFEJNHFMLIN, IBFFHGANCLN, ECPBGMENKEC, FJDPECBCLHJ, HEHFELFOAJP, DEEBHDBLMNJ, IMLLLMLEBKJ, HNJOLAGOIML, IHKEFGGJINK, HGNDEMHEOKB, DPGOPCMAOKE, ALLAANDHLCE, Update, CIIHNBLBAMN, EHALHEMAMOJ, DCOKGOJOANL, PIHKFKGCIKN, NNMMEJPKAFJ, ENHAGMPNENC, NKMKNCIPOPA, OKNCAGCIOGA, KKKLKNLFFDM, OPJMMMPJHHP, HFICDPEDMOF, CPLHKJDHANL, BLHJDFCFDNE, Start, FEFEDCDJJCE, HINNABLOJMI, CHPNJBFLPAF
+### unity/scripts/csharp/AIController.cs
+- Tamanho: 4,046 bytes
+- Classes/tipos: AIController
+- Métodos: OnSpawn, KCENOPOCIJB, CNIMELENAOF, AFCDEMOIDHK, JNAMOGMOBDD, MPPAKKKCKON, OnDeath, BDMIKDCFMHN, IGDPMABMKHC, IBFFHGANCLN, HPEGDGCOGMK, OnRespawn, MGDJHHAEHLF, AIMDBLJILDL, CEPPOCPPFNP, SetAimErrorEffect, HOHDBACBOHP, BHDFDHAELNJ, Update
+### unity/scripts/csharp/WeaponBase.cs
+- Tamanho: 48,000 bytes
+- Classes/tipos: WeaponBase, EHIAMCBJIEG, FFGIDGAGBKL
+- Métodos: HFCCFIHIKDF, AMFEIFPPGDM, JBPAFEHHKON, NMOAHJCCEAI, BDDDHMIOLGD, MPMDFBLCDCH, PIMPDJPGDOD, HLLJPHEPCDG, ActivateGameObject, IBGMCFLHKBC, HILOHJAPCJA, JJJCIPNDMBD, DHDBOLDDKBJ, EBILCBPPOMC, BPHFPFBCALP, AAKGJODONPA, GFOMEGMEHLI, HGIOOJBHFBC, CAPMJPMANLF, CKNAHHABDGG, EAGIDDPHKEB, IDHOKEODKEM, MINHAFIKMJE, DKNJAMCMJCP, NJCBPJILNNI, SetWeapon, HKMCNJPOAAH, ANLHGAPMPFG, GDPCMLDOPPC, JJJBFPCPAGC, HEOMGAJHPFB, UpdateBulletNetworkData, KKIKBDONOIM, BCMEMIGPPDO, GetActiveAttachmentOfType
+### unity/scripts/csharp/WeaponManager.cs
+- Tamanho: 19,925 bytes
+- Classes/tipos: WeaponManager, IGFFAFHNAML, BFDCOAHFAIC, AGONNBBPMEF
+- Métodos: AJDACOLDMME, KKJGIGOHMLI, PMCADFCNLLK, BLOGGMMELMB, IFNIIPLIIAE, GCKKJKGGMIC, FLHIIDJPOFC, DLGJHHMGACK, PEFODPIOGHL, KGBIGLGEEGP, PIFGKOAAEDN, HIPFHCCLCOC, PMCADFCNLLK, BLOGGMMELMB, MLGOKCJKBKJ, KCLDFMIOAKJ, AMBNLAMLFJL, EBPFKEEICPI, KMMEJACBLAK, CEIGJLDMOIP, FOHPBDFOIJF, LAFPIHFFKNM, CCOJDOPFBDC, EDIPLBJINLP, DPJLLACJBHB, ENJJNHACCMA, EOCCBBDBIIA, OLANENLNAFF, AIKICGJNKAO, HMFDBJLPAJN, DKAEBLDPPEL, IOPCFONBOHK, FHLLGOPDHGJ, DODKPGFBHNB, HGGILCAEFBB
+### unity/scripts/csharp/PhotonManager.cs
+- Tamanho: 12,695 bytes
+- Classes/tipos: PhotonManager
+- Métodos: IHNLDDMLBBO, BNCKHEJLIPG, BGELCNAOKMP, ENOOJJPENBD, GGFOEBJKOGB, GGEGOHKHMLH, DPAGMIGOLGD, ODKBLAKJDLI, FKFIAJJEIIG, CPAMEJODPCK, FEAIJMDICIL, JKMAEGKNEAH, OnCustomAuthenticationResponse, JBGCIHDFMHB, ILPCLHPAPMH, DMMEDEFIDAO, GKIABFLLPJI, GBPKMBFAPDB, MJJKLPAMPMD, KHFDMKMBHIA, CPIEBKFPPKB, DCFPDICBHEK, OnConnected, LBAHPPJIDPK, OnDestroy, AALAPONJACI, JGLFMOEDLGL, LMJEPECCJOE, KHBKODFBFHC, MAGMLMCECHD, BKNMBPGHFDJ, EHOIKKABMKP, EFEOOOIKCDD, INMEAIDLJLD, KFAFEPCGBGN
+### unity/scripts/csharp/PhotonCharacterBase.cs
+- Tamanho: 28,899 bytes
+- Classes/tipos: PhotonCharacterBase, PNPNIANMMHO, EHOEJOAPMPC, HDHHHDBPOJL, NFMGKDLIAMJ, APJJHBCAJLD, FMBAKCHNFBB
+- Métodos: AKFBAILGDOK, LGLGHAAMONM, DAGHJBLOEFA, EDDEMJHLNPD, AHEFGAILEHC, BCHIGOECMLP, PNMGHEAINNP, BENHKFKPLOE, JGDBLIJPHCD, System_002EIDisposable_002EDispose, MoveNext, System_002ECollections_002EIEnumerator_002EReset, System_002EIDisposable_002EDispose, MoveNext, System_002ECollections_002EIEnumerator_002EReset, System_002EIDisposable_002EDispose, MoveNext, System_002ECollections_002EIEnumerator_002EReset, EBDMHPHPMOO, PreviewMode, StaticMode, DisableControls, ResetStats, AddTotalDamage, AddKill, AddScorestrikeKill, RemoveKill, SniperKill, AddDeath, AddScore, DisableControllerComponents, SetLevel, AddLike, AddPentaKill, AddQuadraKill
+### unity/scripts/csharp/TeamDeathMatchMode.cs
+- Tamanho: 19,926 bytes
+- Classes/tipos: TeamDeathMatchMode
+- Métodos: IDECODNKDNM, ADKDKPJGDJD, AEHEPJBLCEE, BNPLGJALLBN, DMNPFPEPABB, GBNJFGBBHMC, GFIKILFCGPD, BOCLMAMIODL, FLAMPDCLPLG, BPIEFPCDHNJ, AJIBHBFOENN, IAKENDMIFIE, OnPlayerReadyToSpawn, NBPNOHALGJH, EBPGAPIBMBL, IHNAJJLIBMD, NOHICGEJLJL, PIBKJFAOANJ, DBHKGMMAFCE, NOJAMADNGEO, NJJKIDNCDGI, DMONKACIHGK, NDOHEDEANAL, MNKIKFNGOHD, MDLHBIBKDCJ, FinishMode, DOGEEEEBNAH, EIGHDOJBAPF, isPlayerWinner, BJAPFBJPPJK, NPFJNEDMLHH, LAJODEEKDOP, OJKEMNOBMFA, OPLLOGCNBGM, DNCJACBHABH
+### unity/scripts/csharp/FreeForAllMode.cs
+- Tamanho: 19,827 bytes
+- Classes/tipos: FreeForAllMode
+- Métodos: LCIBJBLMKHC, MCAIPFFDALG, KLHDJOOJFHE, JABAOHGACGB, OHMPHLEEOAD, PDCKCDPFKGO, HOPCMHFLJDL, GetSpawnPoint, DHHFCBLCMOM, ENONNJHAFGE, GBPMDLELDAI, DJBNDBKMMDO, EAHIJCMAHHD, NMAJKIMGFLP, isPlayerWinner, HDGHKOCMBNP, JPLBKBLHCDL, KFANFCBBHGO, GGBJNLFMFIB, LIEBDOIKKGA, HOJKBOACMKF, OKADGHJLLIL, MCCAOJBAGNN, KCCIDIMFBHH, DEPFHFBDFEK, ENLHCMKONDP, LBJFGNGFOOA, BKGAMAFNHAE, KBABOIBAODN, JMMCDIBILPP, HOPJOECOAOA, EJGCHKADLLI, IFJJIKDPGKG, CJIONLOMPDB, KCFEJKILIHB
+### unity/scripts/csharp/EliminationMode.cs
+- Tamanho: 35,951 bytes
+- Classes/tipos: EliminationMode, GDINKLKJJJK, AEKFBKFKPJN, DMJCLGFLMMP
+- Métodos: EOLNAONJMCK, KFNNFPHGDNA, DPNKAGBKMEG, HCEIBIHFOCB, DAGIGKFFMHK, FPGGKLAPIKC, KFDDIONAPEM, EFLJBCHMBLA, NMFKFDJHJAJ, CJGHPPNPNIG, HGLKIFLAOHF, NGHMGAHOAJJ, CFIBAJNKGGE, DABMGCLJBOM, NAIGGFNBJML, GDMKMNBHIFK, CKFMJKFJFJE, AJPFLLNJJGK, AOEKLMCODHF, FMAJAGIHCHP, CPBLEONNACB, BKKIGFKHLPM, IOEBOHMMGBA, FMNBKFLMGAE, PPGFFPGKGCP, DKMMNGCPHCP, JOENDCFALNC, KILDBFLKHFE, GHPCBPDNFIN, BBKDHNILLAD, KDLFENLLMGF, OANAGPPBHPC, KILJJMACKPB, APGELJFDGLM, LJLBEGMNAGP
+### unity/scripts/csharp/BombMode.cs
+- Tamanho: 42,398 bytes
+- Classes/tipos: BombMode, GIOBKPFHIFG, GFHFLKGBJGA, NIBGFOMKIDP, GCLOFDELAOK
+- Métodos: CFIBAJNKGGE, FHACBMLCLFA, DKMMNGCPHCP, ELOKHGDFEGH, NALICAPJANO, AKBJNHLFFNE, CCALANIEBOG, JDANOIHCKFM, HBIAFCDFBKN, HAKJHKONGMN, EOGCGGGPNDL, GDBKFFMFLEE, LIHEJMMIEDD, MJNDKGACAMO, LGBPBFLKEAM, HGLKIFLAOHF, PCPMPICMHPL, AJPFLLNJJGK, ILEGPGEGLMM, CENCADAJJBP, DPNKAGBKMEG, ABAEGHAAIID, NGHMGAHOAJJ, FIKEDIHJHJB, ACDMHNHOJGG, MLEAKBJGJIE, CJGHPPNPNIG, IMNKNJJNBEJ, GPCEDNKPEHN, KFDDIONAPEM, PELJOBNDHDL, FFPINKDMEDA, HCFEBLDMFGP, IIMHKADFLNK, APGELJFDGLM
+### unity/scripts/csharp/MapSelector.cs
+- Tamanho: 20,740 bytes
+- Classes/tipos: MapSelector, CLJCFNOCCEI
+- Métodos: GHOOCPOFECG, PONOCDJGFGC, IEHAOEIGGOF, AJJJJGDMIHF, LCJOPLNCIGB, NIKODJEDPDP, MEIIJPLOGAM, HBKKAMAMEKL, OKBOOLACPGO, GJGNOMPMIHH, GPEEHMGDMHD, HNBLPEDOHBE, GIIOCEGPMAA, LNDCEFOEHAF, KMCBNPDMMOG, BNONNBMGHKG, PELMDJDJMGJ, FGIAKEIGNCI, OJGPFCAIMJB, HMFBFHFMFHL, POFDNOCEMKD, DNFLCHJCGAE, MMAMPMBCEBG, KCDHNKEPLBN, LDMDMPIGOFL, JOFKKDIHPFA, MNFFNCGHIDO, AGJLLLDMLLH, DFPGBHAJEND, BDKPIMKAAMH, LLLAFNGEEDF, LGGEPIFHDIL, KGLDILJPNGC, LCAEJMCDJEC, CMKLAGCEEKK
+### unity/scripts/csharp/SpawnPointManager.cs
+- Tamanho: 24,442 bytes
+- Classes/tipos: SpawnPointManager, JMJECKEDBHI, JHNIPBMDHCK
+- Métodos: ODCHODMNDKA, OAMDGJMJNOE, LFGHIPHDPJP, AJPDHMJGJLE, LLOBCINKDKF, HGFLBEFCEFE, BHDBNIFEFEA, JNACFPBMBFE, JAIPAEBMBMB, KOGHEHOAJEE, JIADOGAALHO, CCJNDFAEIOJ, BNCOFEHBMHC, OFOLOMDLBIA, OONNHDJKLOI, DOBOBKEIIEH, EJIIJADIOBP, AJNNNFCEFHE, NJJKIDNCDGI, GBLHPNAIFLE, DAPFMFKDDNN, LPHFPANBKMG, EAOHKMBOAEH, JDKPJIOHFHA, BJFLFOEBNFK, CIJKCEGENJI, KLHKNNKCGHG, HOOLHINBPAP, MIFDGMIJHMJ, PIOKKFBGNCJ, HFDJKCECILB, GetRandomSpawnPoint, CCBNAELCFOM, LKDAPBFPHMN, IILGFHHLEHB
+### unity/scripts/csharp/InputManager.cs
+- Tamanho: 36,360 bytes
+- Classes/tipos: InputManager
+- Métodos: ENFIBLHOKPM, ECEELHLHANK, KHGICBBCNNA, ANHHDKCDNKE, AOFIGAJHIMN, BGCKPJNIHNH, ABEJCANJALI, DHNGCGCDPIC, ADNKDBLGHML, JLOJIFHMBNA, IDEFGOGOGNC, OGDGKPINPJJ, EIANMMHMIIO, ToggleCursor, AGFEKACIAAG, PMPMEDDHCLH, MIFODNIOLGN, HKAMHGNIKLL, ABENMKJMDPP, ILJNFKBJKHF, JOFCLLFIBJA, GBPNOGAEKDO, EFBJFDEDDDK, JGALMNOMIFL, OBJEEABFLMC, HNPKHOILHLM, FBENHJFDJAB, PEGPBGGDJDL, DELMNBCFOPA, LOEDJBHKJKL, MIILNFHMELC, EIPHEKDNKCJ, IOKJAAAOKJI, HBBLDELKAGF, IMFBPOGLCKC
+### unity/scripts/csharp/MouseLook.cs
+- Tamanho: 15,675 bytes
+- Classes/tipos: MouseLook
+- Métodos: EHHGMNNDEMJ, CGMNDLNLLGI, AEEEEPMGNDJ, KBCGMOODGLI, MEAIJGEGOKN, AIDGGLPILAP, KJFKMJOBNLO, DDGAKCJNHGJ, OJCEBLNICBM, PPOFLNMBCIM, OIMFHLMJKPC, PEBMKFOEABJ, OHGHBEPNMNK, IKOJCKGHPBK, OBHBCOLPNOH, MGDJLLELNOB, KOGONAEIHHB, MGBEAMEEOOC, OIGIHPHHOHE, OGJFFIMLAPN, PKBHKICKNLF, IHBILMNOHPH, EIGPIDGLBNI, FNHEGAJMFCF, GEPJFLKCIAL, BJNJDDCLKJA, HIGLHDGAFNI, PBOBJKBOBFM, HHBGNKDBJGP, EFJMIOHPLPA, GOCIFGKFIDO, GAGCCFNGOAE, GHHDEAGJJKA, BJBFGMABJFP, BHEBDOLKHAP
+### unity/scripts/csharp/TouchButtonInteractable.cs
+- Tamanho: 10,354 bytes
+- Classes/tipos: TouchButtonInteractable
+- Métodos: BIHNIGNLDNJ, AANPDAOCDIG, OEFEACDBCML, IOOHEGHENPL, EFLDIIDCEHL, EDOIFELNBIK, LDBOAPPOOGA, KPGCEOFDOLM, OABMPPJBBAA, HNMLOCPACMF, DABFOLHFCKE, DGMAHJDOAHE, MLDJFGLOBBB, CKFOKBDEDDL, NBKMJAEGPID, BCCJGBNNCLB, AFCAFPEIILM, KAHEEMIGKCB, EIGPIDGLBNI, DAFFNBPEHIE, NBEOOLHKIED, BJBFJIIHHCI, ENCGLGNEBNM, CLJCHLCHGKL, IDDNJCKCJFK, EHDMEMKNELF, GAPDJOPCOIA, FADMPOJDAAK, NEFODLFPMPI, IFAGMBOPMEC, OMABJHMFJGG, INDLAMMDLKP, BCDPKJGOJOG, NNLCJIDMPOI, ODNKCNMNMDM
+### unity/scripts/csharp/PlayerUIController.cs
+- Tamanho: 23,174 bytes
+- Classes/tipos: PlayerUIController, EEBODBMCOEM, OJMKKDNCEFJ
+- Métodos: AKAEEPPHNAA, ECMKEGOMPEJ, OEMLOFBEBHC, GJJAIJEKKPJ, JFBOJNOJLNL, IMPOMPIMDDM, FEOEGEHDHHG, LGMEEHKADMJ, OANHLCHOBOB, ANLOCPOLLPH, GFKBIAGAFMC, ADJEDDAMMEF, AHIJPHMLPGF, FNFINAJKGDO, HGADIEMHNCC, MLCJGELAECD, KDBOIEJOGGM, NEPACHAGAGL, IEGGBBMOLBD, KDNJEFDPLJG, ENFGFPEAKCB, HPAAJNPHKIO, PLEHIJJDJCC, BHAHOHFDFOA, LJBOHMHDPBJ, CPBDBBEAECE, FDDFKOCEDCH, PKOPGHIDBHD, LKFGBMNLJBN, PEEEPGLEKKJ, HNOIADJOJIG, GDEBCKNKJDK, GHMCKKAONKN, LKIBBCBOIHJ, CLIDAMLELPE
+### unity/scripts/csharp/WeaponLoader.cs
+- Tamanho: 30,605 bytes
+- Classes/tipos: WeaponLoader, AIPJPIMHNPK, WeaponInfo, InstantiatedWeaponInfo, MLHNJNLNHOH, JIPCAAAIIBA
+- Métodos: EMEELGPAPKA, OOEPMHNAJEA, MIOLHIIEHHA, EFHIEIKKKMP, JKILNHAHMCF, HOONMMHPMGM, GABBEGFFBKC, EFELNDEGGEK, MKOOBOBPPJF, KNJGBALEPKN, GLKLMIIEPHG, KPOMEIDJBFD, MGOMFEKMNCM, PFHJLDNKBIN, CAJAPPIBNIC, LoadThirdPersonWeapon, KJCLMHGJNIL, NAKEHHPLGCE, ACKHPKEGAPB, JPFOEEECJLH, FAEDGFHOEFC, NPMKFIECCJL, CEAAHFKOFON, ALICJGJCBAK, ENIHBOODIGA, IKKAEDKBLBL, PMJINANIFCA, CIOHGBEMFAL, JMCDDEJPNCE, CKODGNJFMLF, MKIONLHBBKC, AGNCFMCFEFA, BNCGOJLKNHA, OLLILONEMJC, GetWeaponInfo
+### unity/scripts/csharp/BotInstantiationData.cs
+- Tamanho: 22,319 bytes
+- Classes/tipos: BotInstantiationData
+- Métodos: CEDNILPOEIF, LCFDADNPEMI, LCIHAMNMIMP, EEPBIIMLFCA, HJIAIBDJPEL, AAGKCIDMNOA, OHNLLNPLJGE, JNLDPLLMGAB, GIHGLKDGJIL, IMCKCNANPOB, GCANCHGEIFJ, DAPJABPICPE, CNHAOOPCJJC, KNNFNBGPCBI, CCIGGKJLONG, CFFGGKDAOPB, JKJOPLCAJOC, OAKFFLEIACO, LBAGMFMNDNN, GMEPJKOCLHC, ADNDKJKIAHI, MLELOIKNKOP, GONMEDDDKCC, LFLOEBLHCKJ, JCOICCMJAPD, KFBOAOAFGLK, LEOKCECFIPA, JOLMODINFHA, DOKPEDIBHKN, PNKCGHAEJCD, DLIJNNLPOAC, KLIEMBABHJO, OFAEHIDMBAI, KOLCKMJGGEE, CDPDBNAGGEH
+
+## Arquivos relevantes (amostra)
 - unity/scripts/il2cpp/dump.cs (39,885,213 bytes)
 - unity/scripts/il2cpp/stringliteral.json (2,108,883 bytes)
 - unity/scripts/il2cpp/script.json (104,907,766 bytes)
@@ -382,207 +474,10 @@
 - unity/scripts/csharp/SpecialWeaponOffers.cs (556 bytes)
 - unity/scripts/csharp/DebugConsoleCommandController.cs (8,984 bytes)
 - unity/scripts/csharp/BKHHFJILCHN.cs (6,579 bytes)
-- unity/scripts/csharp/SniperDelay.cs (17,845 bytes)
-- unity/scripts/csharp/OHEJPDCGJON.cs (10,193 bytes)
-- unity/scripts/csharp/BIHGCFDLGGK.cs (383 bytes)
-- unity/scripts/csharp/GrenadeChargesItem.cs (6,699 bytes)
-- unity/scripts/csharp/BBNHBGADNEP.cs (347 bytes)
-- unity/scripts/csharp/FNGGJMDFOHO.cs (2,654 bytes)
-- unity/scripts/csharp/LFDHIFEIGDC.cs (571 bytes)
-- unity/scripts/csharp/CLNHBOFAKMC.cs (1,568 bytes)
-- unity/scripts/csharp/LAMMDBNMHCK.cs (21,644 bytes)
-- unity/scripts/csharp/UI_Attachment.cs (15,155 bytes)
-- unity/scripts/csharp/AnimatedCountdown.cs (21,797 bytes)
-- unity/scripts/csharp/DGEDGECBFEJ.cs (21,648 bytes)
-- unity/scripts/csharp/OGHNGBNGKEJ.cs (19,852 bytes)
-- unity/scripts/csharp/BotWithPointData.cs (457 bytes)
-- unity/scripts/csharp/UI_Shop_Attachment_Item.cs (20,998 bytes)
-- unity/scripts/csharp/PhotonCharacterBase.cs (28,899 bytes)
-- unity/scripts/csharp/KLKMGNFMHKL.cs (9,200 bytes)
-- unity/scripts/csharp/TutorialController.cs (27,529 bytes)
-- unity/scripts/csharp/GKMBBMKONAN.cs (22,332 bytes)
-- unity/scripts/csharp/IKEFCGLMEDD.cs (20,544 bytes)
-- unity/scripts/csharp/TestScripts.cs (16,231 bytes)
-- unity/scripts/csharp/PlayerUIController.cs (23,174 bytes)
-- unity/scripts/csharp/InputManager.cs (36,360 bytes)
-- unity/scripts/csharp/CJMJKABLBCH.cs (6,310 bytes)
-- unity/scripts/csharp/WeeklyReward.cs (554 bytes)
-- unity/scripts/csharp/CFLDMEEPPLM.cs (19,858 bytes)
-- unity/scripts/csharp/HKOEAMLMOLO.cs (963 bytes)
-- unity/scripts/csharp/BDDGEFAOFGK.cs (1,397 bytes)
-- unity/scripts/csharp/LAHOJFFLMCD.cs (1,107 bytes)
-- unity/scripts/csharp/FMIEFJGMMNK.cs (22,204 bytes)
-- unity/scripts/csharp/InGameUIEventCaller.cs (4,839 bytes)
-- unity/scripts/csharp/GOIPFMKOHBD.cs (482 bytes)
-- unity/scripts/csharp/RocketPlayerMarker.cs (6,660 bytes)
-- unity/scripts/csharp/EMCAENCBNPC.cs (17,047 bytes)
-- unity/scripts/csharp/HHCIMBCEMMC.cs (156 bytes)
-- unity/scripts/csharp/CGFGFDPLOFE.cs (300 bytes)
-- unity/scripts/csharp/PIGCGLINIJB.cs (17,435 bytes)
-- unity/scripts/csharp/GAHNBAHDAME.cs (171 bytes)
-- unity/scripts/csharp/FNOGFEHLBDN.cs (3,834 bytes)
-- unity/scripts/csharp/MMJBLPJBMEJ.cs (659 bytes)
-- unity/scripts/csharp/OOECMMNHMJP.cs (9,499 bytes)
-- unity/scripts/csharp/HAJCPOOJOJH.cs (461 bytes)
-- unity/scripts/csharp/GHOCLNBNPNF.cs (571 bytes)
-- unity/scripts/csharp/RocketControlledModel.cs (13,070 bytes)
-- unity/scripts/csharp/JJLEBGKGNKE.cs (407 bytes)
-- unity/scripts/csharp/CameraGraphicCustomizer.cs (6,002 bytes)
-- unity/scripts/csharp/JAAGPODLLND.cs (17,637 bytes)
-- unity/scripts/csharp/GlobalTimerController.cs (9,821 bytes)
-- unity/scripts/csharp/GameModeData.cs (4,745 bytes)
-- unity/scripts/csharp/rotateCamera.cs (6,923 bytes)
-- unity/scripts/csharp/LAFIACHOMHC.cs (1,476 bytes)
-- unity/scripts/csharp/MHKIPPGDEOL.cs (846 bytes)
-- unity/scripts/csharp/GameParametersUpdater.cs (8,497 bytes)
-- unity/scripts/csharp/BKJJBFHEBNK.cs (215 bytes)
-- unity/scripts/csharp/OKNNHICLGAO.cs (1,382 bytes)
-- unity/scripts/csharp/MALOEOFACMG.cs (735 bytes)
-- unity/scripts/csharp/UI_WorldMarker.cs (23,963 bytes)
-- unity/scripts/csharp/FW_RewardPanel.cs (16,637 bytes)
-- unity/scripts/csharp/IJKJMBCDALD.cs (103 bytes)
-- unity/scripts/csharp/DialogPerkInfo.cs (14,561 bytes)
-- unity/scripts/csharp/FLPNABPNNFI.cs (426 bytes)
-- unity/scripts/csharp/JBJMMFAMKAC.cs (9,267 bytes)
-- unity/scripts/csharp/OIIFHDFAEPN.cs (4,873 bytes)
-- unity/scripts/csharp/IMDHEHIAKKD.cs (11,963 bytes)
-- unity/scripts/csharp/GHOKHJMLDAA.cs (1,078 bytes)
-- unity/scripts/csharp/Scope.cs (19,272 bytes)
-- unity/scripts/csharp/StatChangeWithWeapon.cs (9,642 bytes)
-- unity/scripts/csharp/CaseModelsController.cs (24,791 bytes)
-- unity/scripts/csharp/AttachmentManager.cs (21,096 bytes)
-- unity/scripts/csharp/Bullet.cs (11,810 bytes)
-- unity/scripts/csharp/HEBMBHDACNE.cs (24,896 bytes)
-- unity/scripts/csharp/NNFHJHJDKPG.cs (199 bytes)
-- unity/scripts/csharp/BKEKPCKMKPD.cs (978 bytes)
-- unity/scripts/csharp/CFKAJCDHDII.cs (5,930 bytes)
-- unity/scripts/csharp/PIECCEAAJDB.cs (14,500 bytes)
-- unity/scripts/csharp/JMJMKBEGHAJ.cs (18,025 bytes)
-- unity/scripts/csharp/HFMEIFLNDOP.cs (10,207 bytes)
-- unity/scripts/csharp/LocalScoreStrike.cs (237 bytes)
-- unity/scripts/csharp/ClusterStrikeSpawner.cs (21,700 bytes)
-- unity/scripts/csharp/RemoteUAV.cs (215 bytes)
-- unity/scripts/csharp/ObjectPoolingManager.cs (18,005 bytes)
-- unity/scripts/csharp/DMFOENKBDPP.cs (3,356 bytes)
-- unity/scripts/csharp/PILMOGGPFEN.cs (6,201 bytes)
-- unity/scripts/csharp/BLJGIHAJLLB.cs (5,830 bytes)
-- unity/scripts/csharp/LocalClusterStrike.cs (14,701 bytes)
-- unity/scripts/csharp/ItemContainer.cs (6,911 bytes)
-- unity/scripts/csharp/HMMNNFBGNAD.cs (258 bytes)
-- unity/scripts/csharp/KKEMDGHPCBM.cs (664 bytes)
-- unity/scripts/csharp/GoreRagdollEditor.cs (26,403 bytes)
-- unity/scripts/csharp/KJCJFCFDEMB.cs (905 bytes)
-- unity/scripts/csharp/CACCFELEDIC.cs (30,665 bytes)
-- unity/scripts/csharp/CEGEDAEFMKD.cs (24,415 bytes)
-- unity/scripts/csharp/ProjectileExplosion.cs (29,082 bytes)
-- unity/scripts/csharp/TurretRemoteModel.cs (6,725 bytes)
-- unity/scripts/csharp/FEPFHECEMLG.cs (320 bytes)
-- unity/scripts/csharp/TutorialMoveHerePositionSensor.cs (13,628 bytes)
-- unity/scripts/csharp/FreeWeaponWallRewardController.cs (2,512 bytes)
-- unity/scripts/csharp/ModeState.cs (272 bytes)
-- unity/scripts/csharp/LIJHEACDDJB.cs (197 bytes)
-- unity/scripts/csharp/CategoryToggle.cs (350 bytes)
-- unity/scripts/csharp/POONPOBLJHM.cs (162 bytes)
-- unity/scripts/csharp/UIEventSystemsListener.cs (14,419 bytes)
-- unity/scripts/csharp/JHBMBDLHFPC.cs (199 bytes)
-- unity/scripts/csharp/GNIOOFNKDGJ.cs (619 bytes)
-- unity/scripts/csharp/PlayerPrefsAPS.cs (11,135 bytes)
-- unity/scripts/csharp/wateranimator.cs (8,829 bytes)
-- unity/scripts/csharp/MNAGJICJPPB.cs (603 bytes)
-- unity/scripts/csharp/GBACBBOAHIN.cs (198 bytes)
-- unity/scripts/csharp/ICPNKEKKMFL.cs (21,815 bytes)
-- unity/scripts/csharp/FFLJAJLHLLE.cs (5,865 bytes)
-- unity/scripts/csharp/OfferOrders.cs (646 bytes)
-- unity/scripts/csharp/HealthbarController.cs (26,891 bytes)
-- unity/scripts/csharp/OLFEJNLPGKO.cs (483 bytes)
-- unity/scripts/csharp/BlockButtonController.cs (12,684 bytes)
-- unity/scripts/csharp/ScorePointsEntity.cs (531 bytes)
-- unity/scripts/csharp/BombIsBeingDefused.cs (11,857 bytes)
-- unity/scripts/csharp/GameProperties.cs (709 bytes)
-- unity/scripts/csharp/PoolObjectBehavior.cs (25,981 bytes)
-- unity/scripts/csharp/GameMode.cs (508 bytes)
-- unity/scripts/csharp/PhotonPlayerLoadout.cs (27,067 bytes)
-- unity/scripts/csharp/SubscribeItemWindow.cs (17,707 bytes)
-- unity/scripts/csharp/GameModeButtonController.cs (2,446 bytes)
-- unity/scripts/csharp/PLDFBFMBOEK.cs (239 bytes)
-- unity/scripts/csharp/BulletTrail.cs (6,988 bytes)
-- unity/scripts/csharp/MLECPGLFKPP.cs (540 bytes)
-- unity/scripts/csharp/TurretLocalModel.cs (18,721 bytes)
-- unity/scripts/csharp/FPS_CustomLight.cs (25,581 bytes)
-- unity/scripts/csharp/FCAMFMADEFI.cs (942 bytes)
-- unity/scripts/csharp/LIEKBMAABLP.cs (10,034 bytes)
-- unity/scripts/csharp/ClusterStrikeBase.cs (21,794 bytes)
-- unity/scripts/csharp/CrazyAdPreview.cs (250 bytes)
-- unity/scripts/csharp/CAABHKOLKCI.cs (548 bytes)
-- unity/scripts/csharp/GNOJEFGKJCL.cs (176 bytes)
-- unity/scripts/csharp/NotifyOnDestroy.cs (26,147 bytes)
-- unity/scripts/csharp/LHMGNEMHHKM.cs (510 bytes)
-- unity/scripts/csharp/CaseSlotData.cs (601 bytes)
-- unity/scripts/csharp/CharacterComponent.cs (720 bytes)
-- unity/scripts/csharp/DamageTextProperties.cs (1,212 bytes)
-- unity/scripts/csharp/NNELFILDCDE.cs (704 bytes)
-- unity/scripts/csharp/PerkData.cs (410 bytes)
-- unity/scripts/csharp/PlantedBomb.cs (24,033 bytes)
-- unity/scripts/csharp/NPC_Wandering.cs (5,261 bytes)
-- unity/scripts/csharp/DismemberData.cs (14,861 bytes)
-- unity/scripts/csharp/NCKAHEFCBPE.cs (1,890 bytes)
-- unity/scripts/csharp/MOBDHJEMPJC.cs (738 bytes)
-- unity/scripts/csharp/DropWeaponSystem.cs (6,894 bytes)
-- unity/scripts/csharp/TextTranslator.cs (9,248 bytes)
-- unity/scripts/csharp/NJHPDJBHOGO.cs (918 bytes)
-- unity/scripts/csharp/AutoDestroyPS.cs (3,573 bytes)
-- unity/scripts/csharp/UI_DropWeapon.cs (22,150 bytes)
-- unity/scripts/csharp/ChopperAnimator.cs (4,936 bytes)
-- unity/scripts/csharp/FACHGHAJCKF.cs (204 bytes)
-- unity/scripts/csharp/JLKLAJJKDDO.cs (13,462 bytes)
-- unity/scripts/csharp/FPHOLGAHOJG.cs (168 bytes)
-- unity/scripts/csharp/MLDOMGCHJCF.cs (705 bytes)
-- unity/scripts/csharp/LNMDCFGIMAI.cs (299 bytes)
-- unity/scripts/csharp/WeaponManager.cs (19,925 bytes)
-- unity/scripts/csharp/FlexibleGridLayout.cs (19,530 bytes)
-- unity/scripts/csharp/DBKENCCJDPK.cs (279 bytes)
-- unity/scripts/csharp/EditorUpdateForUploadableGameData.cs (6,856 bytes)
-- unity/scripts/csharp/CaptureFlagPoint.cs (13,419 bytes)
-- unity/scripts/csharp/CBEPPBFCPLI.cs (18,499 bytes)
-- unity/scripts/csharp/GMJKBMCPBBJ.cs (535 bytes)
-- unity/scripts/csharp/MachinegunRemoteSkill.cs (12,363 bytes)
-- unity/scripts/csharp/KAPPIIIGOFH.cs (3,635 bytes)
-- unity/scripts/csharp/NGAHGCDDPJN.cs (160 bytes)
-- unity/scripts/csharp/CLFAEOIMKAP.cs (11,615 bytes)
-- unity/scripts/csharp/BAOCAMKJGFB.cs (7,867 bytes)
-- unity/scripts/csharp/BlandCustomedStatusMod.cs (28,632 bytes)
-- unity/scripts/csharp/MCKKLEELJDD.cs (311 bytes)
-- unity/scripts/csharp/BLPKMMODFEE.cs (1,663 bytes)
-- unity/scripts/csharp/CustomCatalogItem.cs (17,337 bytes)
-- unity/scripts/csharp/IKMAHEEEJAB.cs (26,378 bytes)
-- unity/scripts/csharp/DNONNLLDLBO.cs (8,289 bytes)
-- unity/scripts/csharp/SoundSystemController.cs (12,269 bytes)
-- unity/scripts/csharp/DOKCMGABKIC.cs (17,829 bytes)
-- unity/scripts/csharp/SkyboxRotator.cs (6,315 bytes)
-- unity/scripts/csharp/AJAMGIAOOCJ.cs (8,019 bytes)
-- unity/scripts/csharp/ControlsManager.cs (17,271 bytes)
-- unity/scripts/csharp/StealthChoppperCustomData.cs (583 bytes)
-- unity/scripts/csharp/MouseLook.cs (15,675 bytes)
-- unity/scripts/csharp/AimAssistController.cs (23,156 bytes)
-- unity/scripts/csharp/UI_NotificationCountItem.cs (11,977 bytes)
-- unity/scripts/csharp/EGFMEEBHCAF.cs (5,720 bytes)
-- unity/scripts/csharp/NIDJLBEJAFN.cs (15,650 bytes)
-- unity/scripts/csharp/BulletTrailManager.cs (11,210 bytes)
-- unity/scripts/csharp/COODOKKNBIH.cs (9,125 bytes)
-- unity/scripts/csharp/HunterDroneCustomData.cs (572 bytes)
-- unity/scripts/csharp/RecoilController.cs (10,560 bytes)
-- unity/scripts/csharp/TouchButtonInteractable.cs (10,354 bytes)
-- unity/scripts/csharp/FMBNLFEIBCG.cs (5,159 bytes)
-- unity/scripts/csharp/PCONCDBMLJG.cs (130 bytes)
-- unity/scripts/csharp/GBLNCKEAJJP.cs (10,023 bytes)
-- unity/scripts/csharp/HeadBob.cs (13,310 bytes)
-- unity/scripts/csharp/LHNJNOFGDFA.cs (10,703 bytes)
-- unity/scripts/csharp/PlayerSkillLevel.cs (1,383 bytes)
-- unity/scripts/csharp/SpecialWeaponOffer.cs (846 bytes)
-- unity/scripts/csharp/PhotonPlayerCharacter.cs (17,422 bytes)
-- unity/scripts/csharp/BMFLHFEJLHK.cs (11,111 bytes)
-- unity/scripts/csharp/BombSite.cs (22,509 bytes)
-- ... mais 64876 arquivos relevantes omitidos
+- ... mais 65076 arquivos relevantes omitidos
 
-## Observação
-Inventário estrutural automático. Não presume que código/assets sejam reutilizáveis; isso exige inspeção técnica e verificação de licenças.
+## Conclusão técnica inicial
+- O pacote contém código Android decompilado (Java/Smali) e uma extração de projeto Unity/IL2CPP com dump de C#, scripts, bibliotecas nativas e recursos gráficos/áudio.
+- A presença de classes de Photon e de modos de jogo sugere componentes de rede/multiplayer, mas a disponibilidade funcional dos servidores e serviços não foi validada.
+- Inventário e assinaturas de código não provam que o projeto recompila como um projeto Unity original; faltam cenas/projeto-fonte e dependências originais verificadas.
+- Reutilização de código, modelos e áudio depende de direitos/licenças.
