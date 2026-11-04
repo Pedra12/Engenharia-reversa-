@@ -111,6 +111,7 @@ func _make_menu():
     var layer=CanvasLayer.new()
     add_child(layer)
     menu=Control.new()
+    menu.mouse_filter=Control.MOUSE_FILTER_IGNORE
     menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     layer.add_child(menu)
     var panel=PanelContainer.new()
