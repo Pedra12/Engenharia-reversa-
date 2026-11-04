@@ -47,7 +47,7 @@ def refs(v):
  elif isinstance(v,dict):
   for x in v.values(): out.extend(refs(x))
  else:
-  for k in ("component","m_Component","first","second"):
+  for k in ("component","m_Component","first","second","m_Texture","texture"):
    try: x=getattr(v,k,None)
    except Exception: x=None
    if x is not None: out.extend(refs(x))
@@ -98,7 +98,7 @@ def main():
        if not b: break
        dst.write(b)
    env=UnityPy.load(str(root)); objects=list(env.objects)
-   records={}; errors=[]; counts=collections.Counter(); external_paths={}; mesh_exports={}
+   records={}; errors=[]; counts=collections.Counter(); external_paths={}; mesh_exports={}; texture_exports={}
    for i,o in enumerate(objects):
     pid=int(getattr(o,"path_id",i)); t=typ(o); src=source(o)
     try:
@@ -110,6 +110,16 @@ def main():
       paths.append(str(ep).replace("\\\\","/").rsplit("/",1)[-1])
      external_paths[src]=paths
      d=o.read(); name=attr(d,"m_Name") or attr(d,"name") or ""
+     if t=="Texture2D":
+      try:
+       image=d.image
+       if image:
+        texture_dir=OUT/"exported_textures"; texture_dir.mkdir(parents=True,exist_ok=True)
+        texture_name=f"{safe(src)}__{pid}__{safe(name or 'texture')}.png"
+        image.save(texture_dir/texture_name)
+        texture_exports[(src,pid)]=str(pathlib.Path("exported_textures")/texture_name)
+      except Exception as texture_error:
+       errors.append({"source":src,"path_id":pid,"type":t,"error":"texture export: "+str(texture_error)[:220]})
      if t=="Mesh":
       try:
        exported=d.export()
@@ -178,6 +188,14 @@ def main():
       if ref["field"]=="m_Mesh":
        entry["exported_obj"]=mesh_exports.get((target_source,ref["path_id"]))
       info["references"].append(entry)
+      if c["type"]=="MeshRenderer" and ref["field"]=="m_Materials":
+       material=index.get((target_source,ref["path_id"]))
+       if material:
+        info.setdefault("material_resources",[]).append({
+         "source":target_source,"path_id":ref["path_id"],"name":material["name"],
+         "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],
+         "shader_refs":[{"source":x.get("target_source"),"path_id":x["path_id"]} for x in material.get("refs",[]) if x["field"]=="m_Shader"]
+        })
      return info
     def build_node(tid,seen):
      if tid in seen: return {"error":"cycle","transform_path_id":tid}
@@ -208,10 +226,10 @@ def main():
    write_csv(OUT/"UNITY_REFERENCE_EDGES.csv",edges)
    write_csv(OUT/"UNITY_TRANSFORM_HIERARCHY.csv",hierarchy)
    write_csv(OUT/"UNITY_SCENE_ROOT_CANDIDATES.csv",roots)
-   summary={"serialized_objects_read":len(records),"types":dict(counts.most_common()),"reference_edges":len(edges),"transform_objects":len(hierarchy),"root_transform_candidates":len(roots),"errors":len(errors),"split_families":len(groups),"split_chunks":sum(map(len,groups.values())),"exported_meshes":len(mesh_exports),"map_manifests":map_manifests,"source_files":sorted({r["source"] for r in records.values()})}
+   summary={"serialized_objects_read":len(records),"types":dict(counts.most_common()),"reference_edges":len(edges),"transform_objects":len(hierarchy),"root_transform_candidates":len(roots),"errors":len(errors),"split_families":len(groups),"split_chunks":sum(map(len,groups.values())),"exported_meshes":len(mesh_exports),"exported_textures":len(texture_exports),"map_manifests":map_manifests,"source_files":sorted({r["source"] for r in records.values()})}
    (OUT/"UNITY_SCENE_GRAPH.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
    (OUT/"UNITY_SCENE_GRAPH_ERRORS.json").write_text(json.dumps(errors[:5000],ensure_ascii=False,indent=2),encoding="utf-8")
-   lines=["# Segunda passagem: grafo relacional Unity","",f"- Objetos lidos: **{len(records)}**",f"- Tipos: **{len(counts)}**",f"- Referências PPtr: **{len(edges)}**",f"- Transform/RectTransform: **{len(hierarchy)}**",f"- Candidatos a raízes: **{len(roots)}**",f"- Erros de leitura: **{len(errors)}**",f"- Famílias split: **{len(groups)}**",f"- Partes split: **{summary['split_chunks']}**","","## Arquivos","- UNITY_RELATIONAL_OBJECTS.csv: objetos, IDs, origem, componentes e referências.","- UNITY_REFERENCE_EDGES.csv: relações entre objetos, incluindo o arquivo externo de destino quando resolvido.","- UNITY_TRANSFORM_HIERARCHY.csv: pai/filhos e transformações locais.","- UNITY_SCENE_ROOT_CANDIDATES.csv: raízes candidatas.","- UNITY_SCENE_GRAPH.json: resumo e arquivos de origem.","- UNITY_SCENE_GRAPH_ERRORS.json: amostra de erros.","- maps/: manifestos hierárquicos de cada mapa identificado.","- exported_meshes/: malhas OBJ exportadas com origem e path_id únicos.","","## Limitações","- Referências PPtr externas são resolvidas usando a tabela de arquivos externos do SerializedFile quando disponível.","- Uma raiz de Transform não prova que seja uma cena jogável.","- A reconstrução exige validar materiais, colisões, recursos externos e geometria.","- Este relatório não converte cenas Unity automaticamente para Godot."]
+   lines=["# Segunda passagem: grafo relacional Unity","",f"- Objetos lidos: **{len(records)}**",f"- Tipos: **{len(counts)}**",f"- Referências PPtr: **{len(edges)}**",f"- Transform/RectTransform: **{len(hierarchy)}**",f"- Candidatos a raízes: **{len(roots)}**",f"- Erros de leitura: **{len(errors)}**",f"- Famílias split: **{len(groups)}**",f"- Partes split: **{summary['split_chunks']}**","","## Arquivos","- UNITY_RELATIONAL_OBJECTS.csv: objetos, IDs, origem, componentes e referências.","- UNITY_REFERENCE_EDGES.csv: relações entre objetos, incluindo o arquivo externo de destino quando resolvido.","- UNITY_TRANSFORM_HIERARCHY.csv: pai/filhos e transformações locais.","- UNITY_SCENE_ROOT_CANDIDATES.csv: raízes candidatas.","- UNITY_SCENE_GRAPH.json: resumo e arquivos de origem.","- UNITY_SCENE_GRAPH_ERRORS.json: amostra de erros.","- maps/: manifestos hierárquicos de cada mapa identificado.","- exported_meshes/: malhas OBJ exportadas com origem e path_id únicos.","- exported_textures/: texturas PNG exportadas com origem e path_id únicos.","","## Limitações","- Referências PPtr externas são resolvidas usando a tabela de arquivos externos do SerializedFile quando disponível.","- Uma raiz de Transform não prova que seja uma cena jogável.","- A reconstrução exige validar materiais, colisões, recursos externos e geometria.","- Este relatório não converte cenas Unity automaticamente para Godot."]
    (OUT/"UNITY_SCENE_GRAPH.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
    print("\n".join(lines))
    print("TYPE_COUNTS",json.dumps(counts.most_common(),ensure_ascii=False))
