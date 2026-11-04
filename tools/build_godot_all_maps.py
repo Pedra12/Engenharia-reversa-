@@ -641,12 +641,15 @@ func _audit_all_maps():
                 for frame in range(8):
                     await get_tree().physics_frame
                 var stair_start=player.global_position
+                var saved_stair_yaw=walk_yaw
+                walk_yaw=0.0
                 stair_debug=true
                 move_vector=Vector2(0,-1)
                 for frame in range(45):
                     await get_tree().physics_frame
                 move_vector=Vector2.ZERO
                 stair_debug=false
+                walk_yaw=saved_stair_yaw
                 var climb_height=player.global_position.y-stair_start.y
                 print("STAIR_ROUTE_AUDIT map=lvl_resort hit=true grounded=",player.is_on_floor()," start=",stair_start," end=",player.global_position," climb_height=",climb_height)
                 if climb_height<0.60:
