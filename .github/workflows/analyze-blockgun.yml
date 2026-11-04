@@ -32,25 +32,35 @@ jobs:
           z=zipfile.ZipFile('blockgun.zip')
           infos=z.infolist()
           names=[i.filename for i in infos if not i.is_dir()]
+          sizes={i.filename:i.file_size for i in infos}
           ext=collections.Counter(os.path.splitext(n)[1].lower() or '[sem extensão]' for n in names)
           roots=collections.Counter(n.split('/')[0] for n in names)
-          out=[]
-          out += ['# Relatório de inspeção: Block Gun 3D 2.0.3','']
+          out=['# Relatório de inspeção: Block Gun 3D 2.0.3','']
           out += [f'- Entradas totais: {len(infos)}',f'- Arquivos: {len(names)}',f'- Tamanho descompactado declarado: {sum(i.file_size for i in infos):,} bytes',f'- Tamanho comprimido: {os.path.getsize("blockgun.zip"):,} bytes','']
-          out += ['## Pastas/itens de primeiro nível']
-          out += [f'- {k}: {v} entradas' for k,v in roots.most_common(80)]
-          out += ['', '## Tipos de arquivo (contagem)']
-          out += [f'- {k}: {v}' for k,v in ext.most_common(100)]
-          out += ['', '## Arquivos relevantes encontrados']
+          out += ['## Pastas/itens de primeiro nível']+[f'- {k}: {v} entradas' for k,v in roots.most_common(80)]
+          out += ['', '## Tipos de arquivo (contagem)']+[f'- {k}: {v}' for k,v in ext.most_common(100)]
+          out += ['', '## Estrutura Unity'] 
+          unity=[n for n in names if n.startswith('unity/')]
+          out += [f'- Arquivos dentro de unity/: {len(unity)}']
+          dirs=collections.Counter('/'.join(n.split('/')[:3]) for n in unity)
+          out += [f'- {k}: {v} arquivos' for k,v in dirs.most_common(80)]
+          out += ['', '## Arquivos-chave do código C#']
+          keyfiles=['unity/scripts/csharp/PlayerController.cs','unity/scripts/csharp/AIController.cs','unity/scripts/csharp/WeaponBase.cs','unity/scripts/csharp/WeaponManager.cs','unity/scripts/csharp/PhotonManager.cs','unity/scripts/csharp/PhotonCharacterBase.cs','unity/scripts/csharp/TeamDeathMatchMode.cs','unity/scripts/csharp/FreeForAllMode.cs','unity/scripts/csharp/EliminationMode.cs','unity/scripts/csharp/BombMode.cs','unity/scripts/csharp/MapSelector.cs','unity/scripts/csharp/SpawnPointManager.cs','unity/scripts/csharp/InputManager.cs','unity/scripts/csharp/MouseLook.cs','unity/scripts/csharp/TouchButtonInteractable.cs','unity/scripts/csharp/PlayerUIController.cs','unity/scripts/csharp/WeaponLoader.cs','unity/scripts/csharp/BotInstantiationData.cs']
+          for p in keyfiles:
+            if p not in names: continue
+            try: s=z.read(p).decode('utf-8','replace')
+            except: continue
+            classes=re.findall(r'\b(?:class|struct|enum|interface)\s+([A-Za-z_]\w*)',s)
+            methods=re.findall(r'^\s*(?:public|private|protected|internal)\s+(?:static\s+|virtual\s+|override\s+|async\s+|new\s+)*(?:[\w<>\[\],.?]+\s+)+([A-Za-z_]\w*)\s*\(',s,re.M)
+            out += [f'### {p}',f'- Tamanho: {sizes[p]:,} bytes',f'- Classes/tipos: {", ".join(classes[:20]) or "não identificados"}',f'- Métodos: {", ".join(methods[:35]) or "não identificados"}']
+          out += ['', '## Arquivos relevantes (amostra)']
           pats=re.compile(r'(AndroidManifest.xml|\.smali$|\.java$|\.kt$|\.so$|\.dex$|\.unity$|\.asset$|\.bundle$|\.obb$|\.pak$|\.uasset$|\.umap$|\.fbx$|\.obj$|\.gltf$|\.glb$|\.png$|\.jpg$|\.webp$|\.ogg$|\.wav$|\.mp3$|\.ttf$|\.otf$|\.json$|\.xml$|\.lua$|\.cs$)',re.I)
           matches=[n for n in names if pats.search(n)]
-          sizes={i.filename:i.file_size for i in infos}
-          out += [f'- {n} ({sizes[n]:,} bytes)' for n in matches[:500]]
-          if len(matches)>500: out += [f'- ... mais {len(matches)-500} arquivos relevantes omitidos']
-          out += ['', '## Observação']
-          out += ['Inventário estrutural automático. Não presume que código/assets sejam reutilizáveis; isso exige inspeção técnica e verificação de licenças.']
+          out += [f'- {n} ({sizes[n]:,} bytes)' for n in matches[:300]]
+          if len(matches)>300: out += [f'- ... mais {len(matches)-300} arquivos relevantes omitidos']
+          out += ['', '## Conclusão técnica inicial','- O pacote contém código Android decompilado (Java/Smali) e uma extração de projeto Unity/IL2CPP com dump de C#, scripts, bibliotecas nativas e recursos gráficos/áudio.','- A presença de classes de Photon e de modos de jogo sugere componentes de rede/multiplayer, mas a disponibilidade funcional dos servidores e serviços não foi validada.','- Inventário e assinaturas de código não provam que o projeto recompila como um projeto Unity original; faltam cenas/projeto-fonte e dependências originais verificadas.','- Reutilização de código, modelos e áudio depende de direitos/licenças.']
           open('BLOCKGUN_ANALYSIS.md','w',encoding='utf-8').write('\n'.join(out)+'\n')
-          print('\n'.join(out[:160]))
+          print('\n'.join(out[:180]))
           PY
       - name: Publish inventory report
         uses: actions/github-script@v7
@@ -68,7 +78,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               path,
-              message: 'Add automated Block Gun archive inventory',
+              message: 'Expand Block Gun archive technical analysis',
               content,
               ...(sha ? {sha} : {}),
               branch: 'main'
