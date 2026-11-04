@@ -66,6 +66,10 @@ def val(v):
 def attr(d,k):
  try: return getattr(d,k,None)
  except Exception: return None
+def static_batch_info(d):
+ v=attr(d,"m_StaticBatchInfo")
+ if v is None: return None
+ return {"first_sub_mesh":val(attr(v,"firstSubMesh")),"sub_mesh_count":val(attr(v,"subMeshCount")),"raw":str(v)[:300]}
 def safe(s):
  return (re.sub(r"[^A-Za-z0-9._-]+","_",str(s or "unnamed")).strip("._") or "unnamed")[:100]
 def main():
@@ -131,6 +135,8 @@ def main():
       except Exception as mesh_error:
        errors.append({"source":src,"path_id":pid,"type":t,"error":"mesh export: "+str(mesh_error)[:220]})
      r={"source":src,"path_id":pid,"type":t,"name":str(name)[:220],"refs":[]}
+     if t=="MeshRenderer":
+      r["static_batch_info"]=static_batch_info(d)
      counts[t]+=1
      for f in FIELDS.get(t,()):
       for p in refs(attr(d,f)):
@@ -182,6 +188,7 @@ def main():
      c=level_components.get(int(cid))
      if not c: return {"path_id":int(cid),"type":"UNKNOWN"}
      info={"path_id":int(cid),"type":c["type"],"name":c["name"],"references":[]}
+     if c.get("static_batch_info") is not None: info["static_batch_info"]=c["static_batch_info"]
      for ref in c.get("refs",[]):
       target_source=ref.get("target_source") or level
       entry={"field":ref["field"],"target_source":target_source,"target_path_id":ref["path_id"]}
