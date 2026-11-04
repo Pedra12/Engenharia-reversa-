@@ -572,28 +572,22 @@ func _audit_all_maps():
                 grounded=true
                 break
         var moved=false
+        var max_displacement=0.0
         if is_instance_valid(player):
             var test_origin=player.global_position
             for direction in [Vector2(0,-1),Vector2(0,1),Vector2(1,0),Vector2(-1,0)]:
                 player.global_position=test_origin
                 player.velocity=Vector3.ZERO
                 move_vector=direction
-                for frame in range(12):
+                for frame in range(60):
                     await get_tree().physics_frame
                 var travelled=Vector2(player.global_position.x-test_origin.x,player.global_position.z-test_origin.z).length()
-                if travelled>0.20:
+                max_displacement=maxf(max_displacement,travelled)
+                if travelled>0.50:
                     moved=true
-                    break
             move_vector=Vector2.ZERO
-        var start_position=player.global_position if is_instance_valid(player) else Vector3.ZERO
-        if is_instance_valid(player):
-            move_vector=Vector2(0,-1)
-            for frame in range(120):
-                await get_tree().physics_frame
-            move_vector=Vector2.ZERO
-        var displacement=Vector2(player.global_position.x-start_position.x,player.global_position.z-start_position.z).length() if is_instance_valid(player) else 0.0
-        print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," forward_displacement=",displacement)
-        if not grounded or not moved or displacement<0.25:
+        print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," max_cardinal_displacement=",max_displacement)
+        if not grounded or not moved or max_displacement<0.50:
             failed=true
         _stop_walk_mode()
         await get_tree().process_frame
@@ -692,8 +686,13 @@ func _start_walk_mode():
                 candidate_points.append(collider_node.global_position)
         var best_found=false
         var best_distance=INF
+        var best_clearance=-1
         var best_floor=Vector3.ZERO
-        var offsets=[Vector3.ZERO,Vector3(4,0,0),Vector3(-4,0,0),Vector3(0,0,4),Vector3(0,0,-4),Vector3(8,0,0),Vector3(-8,0,0),Vector3(0,0,8),Vector3(0,0,-8)]
+        var offsets=[]
+        for x in [-16.0,-8.0,-4.0,0.0,4.0,8.0,16.0]:
+            for z in [-16.0,-8.0,-4.0,0.0,4.0,8.0,16.0]:
+                offsets.append(Vector3(x,0.0,z))
+        var test_directions=[Vector3.FORWARD,Vector3.BACK,Vector3.LEFT,Vector3.RIGHT]
         for base_point in candidate_points:
             for offset in offsets:
                 var ray_origin=base_point+offset+Vector3.UP*250.0
@@ -701,15 +700,23 @@ func _start_walk_mode():
                 ray_query.collision_mask=1
                 ray_query.exclude=[player.get_rid()]
                 var floor_hit=get_world_3d().direct_space_state.intersect_ray(ray_query)
-                if not floor_hit.is_empty() and floor_hit.normal.y>0.58:
-                    var distance=Vector2(floor_hit.position.x-camera_pivot.global_position.x,floor_hit.position.z-camera_pivot.global_position.z).length()
-                    if distance<best_distance:
-                        best_distance=distance
-                        best_floor=floor_hit.position
-                        best_found=true
+                if floor_hit.is_empty() or floor_hit.normal.y<=0.58:
+                    continue
+                var candidate_transform=player.global_transform
+                candidate_transform.origin=floor_hit.position+Vector3.UP*0.06
+                var clear_directions=0
+                for direction in test_directions:
+                    if not player.test_move(candidate_transform,direction*1.25):
+                        clear_directions+=1
+                var distance=Vector2(floor_hit.position.x-camera_pivot.global_position.x,floor_hit.position.z-camera_pivot.global_position.z).length()
+                if clear_directions>best_clearance or (clear_directions==best_clearance and distance<best_distance):
+                    best_clearance=clear_directions
+                    best_distance=distance
+                    best_floor=floor_hit.position
+                    best_found=true
         if best_found:
-            player.global_position=best_floor+Vector3.UP*0.03
-            print("WALK_SPAWN_SURFACE point=",best_floor," distance_from_center=",best_distance)
+            player.global_position=best_floor+Vector3.UP*0.06
+            print("WALK_SPAWN_SURFACE point=",best_floor," distance_from_center=",best_distance," clear_directions=",best_clearance)
         else:
             player.global_position=camera_pivot.global_position+Vector3.UP*8.0
             print("WALK_SPAWN_FALLBACK point=",player.global_position)
