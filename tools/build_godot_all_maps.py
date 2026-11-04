@@ -176,11 +176,11 @@ func _build_node(d:Dictionary,parent:Node3D):
     var mats=[]
     for c in d.get("components",[]):
         var typ=String(c.get("type",""))
-        if typ=="MeshFilter":
+        if typ=="MeshFilter" or typ=="SkinnedMeshRenderer":
             meshpath=_ref(c,"m_Mesh")
         elif typ=="MeshCollider":
             colpath=_ref(c,"m_Mesh")
-        elif typ=="MeshRenderer":
+        elif typ=="MeshRenderer" or typ=="SkinnedMeshRenderer":
             mats=c.get("material_resources",[])
     if meshpath!="":
         var mesh=load("res://assets/meshes/"+meshpath.get_file()) as Mesh
@@ -248,14 +248,14 @@ func _fit_camera():
         camera_distance=80.0
     else:
         camera_pivot.global_position=bounds.get_center()
-        var s=bounds.size
-        var largest=max(s.x,max(s.y,s.z))
-        camera_distance=max(12.0,largest*1.65)
-        if largest<0.01:
-            camera_distance=80.0
+        var diagonal=maxf(bounds.size.length(),4.0)
+        var half_fov=deg_to_rad(camera.fov*0.5)
+        camera_distance=maxf(12.0,(diagonal*0.62)/maxf(tan(half_fov),0.1))
+        camera_distance=clampf(camera_distance,12.0,5000.0)
+        camera.far=maxf(10000.0,camera_distance*8.0)
     camera_pivot.rotation=Vector3(deg_to_rad(-32.0),deg_to_rad(35.0),0)
     camera.position=Vector3(0,0,camera_distance)
-    print("CAMERA_FIT distance=",camera_distance," bounds_found=",found)
+    print("CAMERA_FIT distance=",camera_distance," bounds_found=",found," bounds=",bounds)
 func _count_meshes(root:Node)->int:
     var total=0
     for item in root.find_children("*","MeshInstance3D",true,false):
@@ -274,17 +274,26 @@ func _unhandled_input(event):
             if touch_points.size()<2:
                 pinch_distance=0.0
     elif event is InputEventScreenDrag:
+        var old_points=touch_points.duplicate()
         if touch_points.has(event.index):
             touch_points[event.index]=event.position
         if touch_points.size()>=2:
             var pts=touch_points.values()
+            var previous=old_points.values()
             var now=pts[0].distance_to(pts[1])
-            if pinch_distance>0.0:
-                camera_distance=clamp(camera_distance*pinch_distance/max(now,1.0),5.0,5000.0)
+            var before=previous[0].distance_to(previous[1]) if previous.size()>=2 else now
+            if before>1.0 and now>1.0:
+                camera_distance=clampf(camera_distance*before/now,5.0,5000.0)
                 camera.position=Vector3(0,0,camera_distance)
+            if previous.size()>=2:
+                var old_center=(previous[0]+previous[1])*0.5
+                var new_center=(pts[0]+pts[1])*0.5
+                _pan(new_center-old_center)
             pinch_distance=now
-        else:
+        elif event.position.x>get_viewport().get_visible_rect().size.x*0.38:
             _orbit(event.relative)
+        else:
+            _pan(event.relative)
     elif event is InputEventMouseButton:
         if event.button_index==MOUSE_BUTTON_LEFT:
             dragging_mouse=event.pressed
@@ -293,7 +302,21 @@ func _unhandled_input(event):
         elif event.pressed and event.button_index==MOUSE_BUTTON_WHEEL_DOWN:
             _zoom(1.14)
     elif event is InputEventMouseMotion and dragging_mouse:
-        _orbit(event.relative)
+        if event.position.x>get_viewport().get_visible_rect().size.x*0.38:
+            _orbit(event.relative)
+        else:
+            _pan(event.relative)
+func _pan(delta:Vector2):
+    if not camera_pivot or not camera:
+        return
+    var right=camera_pivot.global_transform.basis.x
+    var forward=-camera_pivot.global_transform.basis.z
+    right.y=0.0
+    forward.y=0.0
+    right=right.normalized()
+    forward=forward.normalized()
+    var amount=camera_distance*0.0018
+    camera_pivot.global_position+=(-right*delta.x+forward*delta.y)*amount
 func _orbit(delta:Vector2):
     if not camera_pivot:
         return
