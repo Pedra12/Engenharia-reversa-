@@ -7,8 +7,13 @@ Projeto independente para investigar o pacote Block Gun 3D 2.0.3 e reconstruir u
 ## Plano e documentação
 
 - [Plano mestre e fases do projeto](docs/PLANO_MESTRE.md)
+- [Cenas e mapas recuperados](docs/SCENAS_RECUPERADAS.md)
 - [Análise técnica inicial](BLOCKGUN_ANALYSIS.md)
 - [Inventário recursivo](BLOCKGUN_DEEP_INVENTORY.md)
+
+## Protótipo Godot
+
+A primeira pré-visualização do mapa Forest é gerada e validada automaticamente no workflow [Recursive Block Gun inventory](https://github.com/Pedra12/Engenharia-reversa-/actions/workflows/analyze-blockgun.yml). O projeto Godot e os recursos convertidos ficam no artefato da execução mais recente.
 
 ## Princípio
 
