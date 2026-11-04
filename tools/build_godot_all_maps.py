@@ -90,13 +90,22 @@ def main():
                 all_meshes.add(dst.name); copied.add(dst.name)
                 return dst.name
             n["godot_render_obj"]=copy_mesh(meshpath or colpath,"render")
-            n["godot_collider_obj"]=copy_mesh(colpath,"collider")
+            static_batched=bool(batch and int(batch.get("sub_mesh_count") or 0)>0)
+            # When a static-batched renderer and MeshCollider reference the same
+            # combined Unity mesh, both must use the same sliced world-space OBJ.
+            # Reusing the full collider mesh under the original transform makes
+            # one map collider cover unrelated geometry and trap the player.
+            if static_batched and colpath and colpath==meshpath:
+                n["godot_collider_obj"]=n["godot_render_obj"]
+                n["godot_static_batched_collider"]=True
+            else:
+                n["godot_collider_obj"]=copy_mesh(colpath,"collider")
+                n["godot_static_batched_collider"]=False
             n["godot_materials"]=mats
             # Unity static-batched OBJ vertices are already in scene/world space.
-            # Preserve the original transform for colliders, but render the sliced
-            # static-batch geometry directly under the map root to avoid applying
-            # each GameObject offset a second time.
-            n["godot_static_batched"]=bool(batch and int(batch.get("sub_mesh_count") or 0)>0)
+            # Their visuals and matching colliders are attached to the map root
+            # rather than applying the GameObject transform a second time.
+            n["godot_static_batched"]=static_batched
             for ch in n.get("children",[]): walk(ch)
         walk(d["root"])
         (data_dir/(mapid+".json")).write_text(json.dumps(d,ensure_ascii=False),encoding="utf-8")
@@ -459,7 +468,8 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
                     correction[axis]=visual_size[axis]/collider_size[axis]
             cs.scale=correction
         body.add_child(cs)
-        n.add_child(body)
+        var collider_parent:Node3D=parent if bool(d.get("godot_static_batched_collider",false)) else n
+        collider_parent.add_child(body)
     for ch in d.get("children",[]):
         _build_node(ch,n,map_id)
 func _ref(c:Dictionary,key:String)->String:
