@@ -116,50 +116,153 @@ var jump_button:Button
 func _ready():
     _lighting()
     _make_menu()
+    # Always create a real 3D scene before showing the front end.
+    _load_map("lvl_forest","Floresta")
+    print("BLOCKGUN_BOOT_OK")
     print("BLOCKGUN_MAPS_READY count=",MAPS.size())
 func _make_menu():
     var layer=CanvasLayer.new()
+    layer.layer=10
     add_child(layer)
     menu=Control.new()
-    menu.mouse_filter=Control.MOUSE_FILTER_IGNORE
     menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    menu.mouse_filter=Control.MOUSE_FILTER_STOP
     layer.add_child(menu)
-    var panel=PanelContainer.new()
-    panel.position=Vector2(16,58)
-    panel.size=Vector2(250,560)
-    menu.add_child(panel)
-    var box=VBoxContainer.new()
-    box.add_theme_constant_override("separation",6)
-    panel.add_child(box)
+
+    home_panel=PanelContainer.new()
+    home_panel.position=Vector2(36,64)
+    home_panel.size=Vector2(390,470)
+    var home_style=StyleBoxFlat.new()
+    home_style.bg_color=Color(0.025,0.045,0.075,0.94)
+    home_style.border_color=Color(0.12,0.58,0.82,1)
+    home_style.set_border_width_all(2)
+    home_style.set_corner_radius_all(12)
+    home_panel.add_theme_stylebox_override("panel",home_style)
+    menu.add_child(home_panel)
+    var home_box=VBoxContainer.new()
+    home_box.add_theme_constant_override("separation",14)
+    home_panel.add_child(home_box)
     var title=Label.new()
-    title.text="BLOCK GUN | MAPAS"
-    title.add_theme_font_size_override("font_size",21)
-    box.add_child(title)
+    title.text="BLOCK GUN"
+    title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size",42)
+    title.add_theme_color_override("font_color",Color(0.9,0.96,1,1))
+    home_box.add_child(title)
+    var subtitle=Label.new()
+    subtitle.text="OPERAÇÃO ZERO  |  PROJETO INDEPENDENTE"
+    subtitle.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.add_theme_font_size_override("font_size",12)
+    subtitle.add_theme_color_override("font_color",Color(0.3,0.75,0.95,1))
+    home_box.add_child(subtitle)
+    var description=Label.new()
+    description.text="Prepare-se para entrar no campo de batalha. Explore os cenários recuperados e acompanhe a evolução do projeto."
+    description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    description.custom_minimum_size.y=62
+    home_box.add_child(description)
+    var play=Button.new()
+    play.text="JOGAR"
+    play.custom_minimum_size=Vector2(0,62)
+    play.add_theme_font_size_override("font_size",24)
+    play.pressed.connect(_show_map_select)
+    home_box.add_child(play)
+    var tutorial=Button.new()
+    tutorial.text="COMO JOGAR"
+    tutorial.custom_minimum_size.y=48
+    tutorial.pressed.connect(_show_tutorial)
+    home_box.add_child(tutorial)
+    var maps=Button.new()
+    maps.text="SELECIONAR CENÁRIO"
+    maps.custom_minimum_size.y=48
+    maps.pressed.connect(_show_map_select)
+    home_box.add_child(maps)
+    var version=Label.new()
+    version.text="VERSÃO DE DESENVOLVIMENTO  |  BUILD EXPERIMENTAL"
+    version.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    version.add_theme_font_size_override("font_size",10)
+    home_box.add_child(version)
+
+    selection_panel=PanelContainer.new()
+    selection_panel.position=Vector2(36,40)
+    selection_panel.size=Vector2(320,620)
+    selection_panel.visible=false
+    menu.add_child(selection_panel)
+    var select_box=VBoxContainer.new()
+    select_box.add_theme_constant_override("separation",5)
+    selection_panel.add_child(select_box)
+    var select_title=Label.new()
+    select_title.text="SELECIONE O CENÁRIO"
+    select_title.add_theme_font_size_override("font_size",22)
+    select_box.add_child(select_title)
     for i in range(MAPS.size()):
-        var b=Button.new()
-        b.text=TITLES[i]
-        b.custom_minimum_size.y=43
-        b.pressed.connect(_load_map.bind(MAPS[i],TITLES[i]))
-        box.add_child(b)
-    var info=Label.new()
-    info.text="Arraste para girar\nPinça para aproximar/afastar"
-    box.add_child(info)
+        var button=Button.new()
+        button.text=TITLES[i]
+        button.custom_minimum_size.y=43
+        button.pressed.connect(_load_map.bind(MAPS[i],TITLES[i]))
+        select_box.add_child(button)
+    var select_info=Label.new()
+    select_info.text="Escolha um cenário para abrir a prévia 3D."
+    select_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    select_box.add_child(select_info)
+    var back=Button.new()
+    back.text="VOLTAR AO MENU"
+    back.custom_minimum_size.y=44
+    back.pressed.connect(_show_home)
+    select_box.add_child(back)
+
+    tutorial_panel=PanelContainer.new()
+    tutorial_panel.position=Vector2(36,64)
+    tutorial_panel.size=Vector2(410,470)
+    tutorial_panel.visible=false
+    menu.add_child(tutorial_panel)
+    var tutorial_box=VBoxContainer.new()
+    tutorial_box.add_theme_constant_override("separation",12)
+    tutorial_panel.add_child(tutorial_box)
+    var tutorial_title=Label.new()
+    tutorial_title.text="COMO JOGAR"
+    tutorial_title.add_theme_font_size_override("font_size",28)
+    tutorial_box.add_child(tutorial_title)
+    var tutorial_text=Label.new()
+    tutorial_text.text="1. Toque em JOGAR e escolha um cenário.\\n\\n2. Na prévia, arraste para girar a câmera e use dois dedos para aproximar.\\n\\n3. Toque em ENTRAR NO MAPA para explorar em primeira pessoa.\\n\\n4. No modo exploração, arraste no lado esquerdo para andar, no lado direito para olhar e use PULAR para saltar.\\n\\nO combate, os bots e as partidas completas ainda estão em desenvolvimento."
+    tutorial_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    tutorial_text.size_flags_vertical=Control.SIZE_EXPAND_FILL
+    tutorial_box.add_child(tutorial_text)
+    var tutorial_back=Button.new()
+    tutorial_back.text="VOLTAR"
+    tutorial_back.custom_minimum_size.y=48
+    tutorial_back.pressed.connect(_show_home)
+    tutorial_box.add_child(tutorial_back)
+
     map_label=Label.new()
-    map_label.position=Vector2(280,18)
+    map_label.position=Vector2(380,18)
     map_label.add_theme_font_size_override("font_size",20)
     menu.add_child(map_label)
+    map_actions=HBoxContainer.new()
+    map_actions.position=Vector2(380,54)
+    map_actions.add_theme_constant_override("separation",8)
+    menu.add_child(map_actions)
     var reset=Button.new()
-    reset.text="REENQUADRAR MAPA"
-    reset.position=Vector2(280,54)
-    reset.custom_minimum_size=Vector2(190,42)
+    reset.text="REENQUADRAR"
+    reset.custom_minimum_size=Vector2(150,44)
     reset.pressed.connect(_fit_camera)
-    menu.add_child(reset)
+    map_actions.add_child(reset)
     var explore=Button.new()
     explore.text="ENTRAR NO MAPA"
-    explore.position=Vector2(280,104)
-    explore.custom_minimum_size=Vector2(190,42)
+    explore.custom_minimum_size=Vector2(170,44)
     explore.pressed.connect(_toggle_walk_mode)
-    menu.add_child(explore)
+    map_actions.add_child(explore)
+    var map_menu=Button.new()
+    map_menu.text="CENÁRIOS"
+    map_menu.custom_minimum_size=Vector2(120,44)
+    map_menu.pressed.connect(_show_map_select)
+    map_actions.add_child(map_menu)
+    var main_menu=Button.new()
+    main_menu.text="MENU"
+    main_menu.custom_minimum_size=Vector2(90,44)
+    main_menu.pressed.connect(_show_home)
+    map_actions.add_child(main_menu)
+    map_label.visible=false
+    map_actions.visible=false
+
     jump_button=Button.new()
     jump_button.text="PULAR"
     jump_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -168,6 +271,26 @@ func _make_menu():
     jump_button.visible=false
     jump_button.pressed.connect(_request_jump)
     menu.add_child(jump_button)
+func _show_home():
+    _stop_walk_mode()
+    home_panel.visible=true
+    selection_panel.visible=false
+    tutorial_panel.visible=false
+    map_label.visible=false
+    map_actions.visible=false
+func _show_map_select():
+    _stop_walk_mode()
+    home_panel.visible=false
+    selection_panel.visible=true
+    tutorial_panel.visible=false
+    map_label.visible=false
+    map_actions.visible=false
+func _show_tutorial():
+    home_panel.visible=false
+    selection_panel.visible=false
+    tutorial_panel.visible=true
+    map_label.visible=false
+    map_actions.visible=false
 func _load_map(id:String,title:String):
     _stop_walk_mode()
     if world:
@@ -183,12 +306,12 @@ func _load_map(id:String,title:String):
     if not d is Dictionary or not d.has("root"):
         push_error("Invalid map manifest "+id)
         return
-    _build_node(d.root,world)
+    _build_node(d.root,world,id)
     _create_camera()
     _fit_camera()
-    map_label.text="MAPA: "+title.to_upper()+" | ARRASTE PARA EXPLORAR"
+    home_panel.visible=false\n    selection_panel.visible=false\n    tutorial_panel.visible=false\n    map_label.visible=true\n    map_actions.visible=true\n    map_label.text="CENÁRIO: "+title.to_upper()+" | PRÉVIA 3D"
     print("MAP_LOADED ",id," nodes=",d.get("node_count",0)," meshes=",_count_meshes(world))
-func _build_node(d:Dictionary,parent:Node3D):
+func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     var n=Node3D.new()
     n.name=String(d.get("name","Recovered")).replace("/","_")
     parent.add_child(n)
@@ -211,7 +334,7 @@ func _build_node(d:Dictionary,parent:Node3D):
     # across. It is not the visible house shell and makes the map appear clipped.
     # Keep its renderer mesh for display; retain collider mesh only for physics below.
     var renderpath=colpath if colpath!="" else meshpath
-    if id=="lvl_house" and String(d.get("name",""))=="sm_house_o1":
+    if map_id=="lvl_house" and String(d.get("name",""))=="sm_house_o1":
         renderpath=meshpath
     if renderpath!="":
         var mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
@@ -229,7 +352,7 @@ func _build_node(d:Dictionary,parent:Node3D):
             body.add_child(cs)
             n.add_child(body)
     for ch in d.get("children",[]):
-        _build_node(ch,n)
+        _build_node(ch,n,map_id)
 func _ref(c:Dictionary,key:String)->String:
     for r in c.get("references",[]):
         if String(r.get("field",""))==key:
@@ -392,7 +515,7 @@ func _stop_walk_mode():
     if jump_button:
         jump_button.visible=false
     move_vector=Vector2.ZERO
-    map_label.text="MODO MAPA | ARRASTE PARA EXPLORAR"
+    map_label.text="CENÁRIO: "+world.name.replace("Map_","").to_upper()+" | PRÉVIA 3D"
 func _request_jump():
     if walk_mode and is_instance_valid(player) and player.is_on_floor():
         player.velocity.y=6.0
