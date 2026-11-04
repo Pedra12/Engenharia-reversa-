@@ -188,7 +188,7 @@ def main():
     summary={"input_zip_bytes":ARCHIVE.stat().st_size,"split_families_reassembled":len(assembled),
       "split_sources":sum(x[2] for x in assembled),"bundle_files":len(bundle_names),
       "objects_catalogued":len(rows),"types":dict(counts.most_common()),
-      "exported_files":sum(1 for r in rows if r.get("exported")),"errors_count":len(errors),"errors":errors[:500]}
+      "exported_files":sum(1 for r in rows if r.get("exported")),"skinned_meshes":len(skin_records),"animation_clips":len(animation_records),"gameplay_library_files":len(library_rows),"errors_count":len(errors),"errors":errors[:500]}
     (OUT/"UNITY_ASSET_AUDIT.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
     if previews:
         cols=4; cw,ch=210,155
@@ -210,7 +210,7 @@ def main():
       "- exported/meshes/: malhas OBJ exportadas.",
       "- exported/audio/: amostras de áudio extraídas.",
       "- UNITY_TEXTURE_CONTACT_SHEET.jpg: prévia visual de até 300 texturas.",
-      "- UNITY_ASSET_AUDIT.json: resumo e erros completos (até 500 entradas).",
+      "- UNITY_ASSET_AUDIT.json: resumo e erros completos (até 500 entradas).",\n      "- UNITY_SKINNING_DATA.json: pesos, bind poses e hashes de ossos dos modelos de personagem.",\n      "- UNITY_ANIMATION_DATA.json: curvas e metadados dos clipes de animação.",\n      "- UNITY_ANIMATOR_DATA.json: controladores e avatares recuperados.",\n      "- source_scripts/: stubs C# selecionados para reconstruir o fluxo de jogo.",\n      "- source_assets/: modelos, texturas e sons de gameplay selecionados.",\n      "- GAMEPLAY_ASSET_LIBRARY.csv: origem, tamanho e SHA-256 de cada recurso preservado.",
       "","## Limitações","- Arquivos .split foram concatenados em ordem numérica antes da leitura.",
       "- Recursos ausentes, protegidos ou incompatíveis podem impedir a exportação de alguns objetos.",
       "- O processo não recupera o projeto Unity original nem o código-fonte C# original."]
