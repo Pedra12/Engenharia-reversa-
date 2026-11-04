@@ -184,7 +184,6 @@ var pinch_distance:float=0.0
 var dragging_mouse:bool=false
 var map_label:Label
 var walk_mode:=false
-var stair_debug:=false
 var player:CharacterBody3D
 var walk_camera:Camera3D
 var move_touch_id:=-1
@@ -618,44 +617,31 @@ func _audit_all_maps():
                     print("ASSAULT_DIRECTION_TEST direction=",direction," start=",test_origin," end=",end_position," velocity=",player.velocity," collisions=",player.get_slide_collision_count()," collider=",collision_name," travelled=",travelled)
             move_vector=Vector2.ZERO
         if MAPS[index]=="lvl_resort" and is_instance_valid(player):
-            var stair_collider=world.find_child("RecoveredUnityCollider_umsh_resort_s2",true,false) as StaticBody3D
-            print("STAIR_COLLIDER_DIAGNOSTIC exists=",is_instance_valid(stair_collider)," position=",stair_collider.global_position if is_instance_valid(stair_collider) else Vector3.ZERO," shapes=",stair_collider.get_child_count() if is_instance_valid(stair_collider) else 0)
-            var probe_points=[Vector3(-2.297,0,-17.856),Vector3(-2.297,0,17.856),Vector3(2.297,0,-17.856),Vector3(2.297,0,17.856),Vector3(8.3695,0,10.4778)]
-            var stair_hit:Dictionary={}
-            var found_probe=Vector3.ZERO
-            for probe in probe_points:
-                var stair_query=PhysicsRayQueryParameters3D.create(probe+Vector3.UP*40.0,probe-Vector3.UP*40.0)
-                stair_query.collision_mask=1
-                stair_query.hit_back_faces=true
-                stair_query.exclude=[player.get_rid()]
-                var candidate_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
-                print("STAIR_PROBE point=",probe," hit=",not candidate_hit.is_empty()," position=",candidate_hit.get("position",Vector3.ZERO))
-                if not candidate_hit.is_empty() and abs(candidate_hit.normal.dot(Vector3.UP))>0.70:
-                    stair_hit=candidate_hit
-                    found_probe=probe
-                    break
-            if not stair_hit.is_empty():
-                var stair_spawn=stair_hit.position+Vector3.UP*0.08
-                player.global_position=stair_spawn
+            var stair_probe=Vector3(-2.297,0,-17.856)
+            var stair_query=PhysicsRayQueryParameters3D.create(stair_probe+Vector3.UP*40.0,stair_probe-Vector3.UP*40.0)
+            stair_query.collision_mask=1
+            stair_query.hit_back_faces=true
+            stair_query.exclude=[player.get_rid()]
+            var stair_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
+            if not stair_hit.is_empty() and abs(stair_hit.normal.dot(Vector3.UP))>0.70:
+                player.global_position=stair_hit.position+Vector3.UP*0.08
                 player.velocity=Vector3.ZERO
                 for frame in range(8):
                     await get_tree().physics_frame
                 var stair_start=player.global_position
                 var saved_stair_yaw=walk_yaw
                 walk_yaw=0.0
-                stair_debug=true
                 move_vector=Vector2(0,-1)
                 for frame in range(45):
                     await get_tree().physics_frame
                 move_vector=Vector2.ZERO
-                stair_debug=false
                 walk_yaw=saved_stair_yaw
                 var climb_height=player.global_position.y-stair_start.y
-                print("STAIR_ROUTE_AUDIT map=lvl_resort hit=true grounded=",player.is_on_floor()," start=",stair_start," end=",player.global_position," climb_height=",climb_height)
+                print("STAIR_ROUTE_AUDIT map=lvl_resort grounded=",player.is_on_floor()," climb_height=",climb_height)
                 if climb_height<0.60:
                     failed=true
             else:
-                print("STAIR_ROUTE_AUDIT map=lvl_resort hit=false collider_exists=",is_instance_valid(stair_collider))
+                print("STAIR_ROUTE_AUDIT map=lvl_resort hit=false")
                 failed=true
         print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," max_cardinal_displacement=",max_displacement)
         if not grounded or not moved or max_displacement<0.50:
@@ -880,18 +866,14 @@ func _physics_process(delta):
     # and raycast the tread at the destination. This avoids requiring jump input.
     var stepped=false
     var horizontal_blocked=player.test_move(player.global_transform,horizontal_motion) if horizontal_motion.length()>0.001 else false
-    if stair_debug and horizontal_blocked:
-        print("STAIR_ASSIST_BLOCKED position=",player.global_position," motion=",horizontal_motion)
     if player.is_on_floor() and horizontal_motion.length()>0.001 and horizontal_blocked:
         var space=get_world_3d().direct_space_state
         for step_height in [0.18,0.26,0.34,0.44,0.56,0.70,0.85]:
             var raised=player.global_transform
             raised.origin+=Vector3.UP*step_height
             if player.test_move(player.global_transform,Vector3.UP*step_height):
-                if stair_debug: print("STAIR_ASSIST_REJECT up_blocked height=",step_height)
                 continue
             if player.test_move(raised,horizontal_motion):
-                if stair_debug: print("STAIR_ASSIST_REJECT forward_blocked height=",step_height)
                 continue
             var target=raised
             target.origin+=horizontal_motion
@@ -906,11 +888,9 @@ func _physics_process(delta):
             query.exclude=[player.get_rid()]
             var hit=space.intersect_ray(query)
             if hit.is_empty() or hit.normal.dot(Vector3.UP)<0.68:
-                if stair_debug: print("STAIR_ASSIST_REJECT no_tread height=",step_height," hit=",not hit.is_empty())
                 continue
             var rise=hit.position.y-player.global_position.y
             if rise<0.03 or rise>step_height+0.18:
-                if stair_debug: print("STAIR_ASSIST_REJECT rise height=",step_height," rise=",rise)
                 continue
             var landing=target
             landing.origin.y=hit.position.y+0.06
@@ -920,12 +900,10 @@ func _physics_process(delta):
             overlap.collision_mask=1
             overlap.exclude=[player.get_rid()]
             if not space.intersect_shape(overlap,4).is_empty():
-                if stair_debug: print("STAIR_ASSIST_REJECT capsule_overlap height=",step_height)
                 continue
             player.global_transform=landing
             player.velocity=Vector3.ZERO
             stepped=true
-            if stair_debug: print("STAIR_ASSIST_SUCCESS height=",step_height," rise=",rise," landing=",landing.origin)
             break
     player.move_and_slide()
 func _pan(delta:Vector2):
