@@ -310,7 +310,12 @@ func _load_map(id:String,title:String):
     _build_node(d.root,world,id)
     _create_camera()
     _fit_camera()
-    home_panel.visible=false\n    selection_panel.visible=false\n    tutorial_panel.visible=false\n    map_label.visible=true\n    map_actions.visible=true\n    map_label.text="CENÁRIO: "+title.to_upper()+" | PRÉVIA 3D"
+    home_panel.visible=false
+    selection_panel.visible=false
+    tutorial_panel.visible=false
+    map_label.visible=true
+    map_actions.visible=true
+    map_label.text="CENÁRIO: "+title.to_upper()+" | PRÉVIA 3D"
     print("MAP_LOADED ",id," nodes=",d.get("node_count",0)," meshes=",_count_meshes(world))
 func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     var n=Node3D.new()
