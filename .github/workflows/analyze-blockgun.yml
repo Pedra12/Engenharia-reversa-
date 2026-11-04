@@ -8,6 +8,7 @@ on:
       - "tools/deep_inventory.py"
       - "tools/unity_asset_audit.py"
       - "tools/unity_scene_graph.py"
+      - "tools/build_godot_preview.py"
   workflow_dispatch:
 
 permissions:
@@ -42,6 +43,18 @@ jobs:
         run: python3 tools/unity_asset_audit.py
       - name: Build relational Unity scene graph
         run: python3 tools/unity_scene_graph.py
+      - name: Generate Godot Forest reconstruction preview
+        run: python3 tools/build_godot_preview.py
+      - name: Validate generated project with Godot 4.4.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o /tmp/godot.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.4.1-stable_linux.x86_64
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot_project --import --quit
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project --quit-after 5
       - name: Publish summary
         uses: actions/github-script@v7
         with:
@@ -67,5 +80,6 @@ jobs:
             inventory_out/
             unity_audit/
             scene_graph/
+            godot_project/
           if-no-files-found: error
           retention-days: 30
