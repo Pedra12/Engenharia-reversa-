@@ -175,6 +175,9 @@ var jump_button:Button
 func _ready():
     _lighting()
     _make_menu()
+    if OS.get_cmdline_user_args().has("--audit-all-maps"):
+        call_deferred("_audit_all_maps")
+        return
     # Always create a real 3D scene before showing the front end.
     _load_map("lvl_forest","Floresta")
     _show_home()
@@ -525,6 +528,29 @@ func _count_meshes(root:Node)->int:
         if item is MeshInstance3D and item.mesh:
             total+=1
     return total
+func _count_colliders(root:Node)->int:
+    var total=0
+    for item in root.find_children("*","CollisionShape3D",true,false):
+        if item is CollisionShape3D and item.shape:
+            total+=1
+    return total
+func _audit_all_maps():
+    var failed=false
+    for index in range(MAPS.size()):
+        _load_map(MAPS[index],TITLES[index])
+        await get_tree().process_frame
+        var mesh_count=_count_meshes(world) if is_instance_valid(world) else 0
+        var collider_count=_count_colliders(world) if is_instance_valid(world) else 0
+        var node_count=world.get_child_count() if is_instance_valid(world) else 0
+        print("MAP_AUDIT id=",MAPS[index]," meshes=",mesh_count," colliders=",collider_count," root_children=",node_count)
+        if mesh_count==0 or collider_count==0:
+            failed=true
+    if failed:
+        print("BLOCKGUN_ALL_MAPS_AUDIT_FAILED")
+        get_tree().quit(1)
+    else:
+        print("BLOCKGUN_ALL_MAPS_AUDIT_OK count=",MAPS.size())
+        get_tree().quit(0)
 func _unhandled_input(event):
     if walk_mode:
         _walk_input(event)
