@@ -157,26 +157,29 @@ def main():
       "TutorialController.cs","InGameInputController.cs","WindowGameMode.cs","WindowLobby.cs",
       "DialogMatchResult.cs","FollowCamerasManager.cs","CameraIdentity.cs"
     ]
-    for n in names:
-        base_name=PurePosixPath(n).name
-        if n.startswith("unity/scripts/csharp/") and base_name in script_names:
-            dest=source_scripts/PurePosixPath(n).relative_to("unity/scripts/csharp")
-            blob=z.read(n); save(dest,blob)
-            library_rows.append({"category":"script_stub","original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    # Reopen the source archive: the earlier Unity parsing context has already closed it.
+    with zipfile.ZipFile(ARCHIVE) as source_zip:
+        for n in names:
+            base_name=PurePosixPath(n).name
+            if n.startswith("unity/scripts/csharp/") and base_name in script_names:
+                dest=source_scripts/PurePosixPath(n).relative_to("unity/scripts/csharp")
+                blob=source_zip.read(n); save(dest,blob)
+                library_rows.append({"category":"script_stub","original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
     model_tokens=("sk_char_","m4a1_1.obj","AK_47_2.obj","MP5_794","AWP_2.obj","M249_2.obj","Desert_Eagle_2.obj","M1014_3.obj","Famas_4.obj","P90_1.obj","UMP_45_2.obj")
     texture_tokens=("SimpleMilitary_Soldier01_Black","AK_47_Diffuse","M4A1_Diffuse","MP5_Diffuse","AWP_Diffuse","M249_Diffuse","Desert_Eagle_Diffuse","M1014_Diffuse","Famas_Diffuse","P90_Diffuse","UMP_45_Diffuse","ui_icon_weapon_m4a1","ui_icon_weapon_ak_47","ui_icon_weapon_awp","ui_icon_weapon_mp5")
     audio_tokens=("bg_menu_hazmob","bg_matchStart","bg_start_round","btn_start","ak47_fire","m4a1_fire","mp5_fire","awp_fire","reload","jump","footstep","footsteps","bullet_")
-    for n in sorted(names):
-        if n.startswith("unity/assets/meshes/") and n.lower().endswith(".obj") and any(t.lower() in PurePosixPath(n).name.lower() for t in model_tokens):
-            dest=source_assets/"meshes"/PurePosixPath(n).name
-        elif n.startswith(("unity/assets/textures/","unity/assets/sprites/")) and n.lower().endswith((".png",".jpg",".jpeg")) and any(t.lower() in PurePosixPath(n).name.lower() for t in texture_tokens):
-            dest=source_assets/("sprites" if "/sprites/" in n else "textures")/PurePosixPath(n).name
-        elif n.startswith("unity/assets/audio/") and n.lower().endswith((".wav",".ogg",".mp3")) and any(t.lower() in PurePosixPath(n).name.lower() for t in audio_tokens):
-            dest=source_assets/"audio"/PurePosixPath(n).name
-        else:
-            continue
-        blob=z.read(n); save(dest,blob)
-        library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    with zipfile.ZipFile(ARCHIVE) as source_zip:
+        for n in sorted(names):
+            if n.startswith("unity/assets/meshes/") and n.lower().endswith(".obj") and any(t.lower() in PurePosixPath(n).name.lower() for t in model_tokens):
+                dest=source_assets/"meshes"/PurePosixPath(n).name
+            elif n.startswith(("unity/assets/textures/","unity/assets/sprites/")) and n.lower().endswith((".png",".jpg",".jpeg")) and any(t.lower() in PurePosixPath(n).name.lower() for t in texture_tokens):
+                dest=source_assets/("sprites" if "/sprites/" in n else "textures")/PurePosixPath(n).name
+            elif n.startswith("unity/assets/audio/") and n.lower().endswith((".wav",".ogg",".mp3")) and any(t.lower() in PurePosixPath(n).name.lower() for t in audio_tokens):
+                dest=source_assets/"audio"/PurePosixPath(n).name
+            else:
+                continue
+            blob=source_zip.read(n); save(dest,blob)
+            library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
     (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATOR_DATA.json").write_text(json.dumps({"controllers":controller_records,"avatars":avatar_records},ensure_ascii=False,indent=2),encoding="utf-8")
