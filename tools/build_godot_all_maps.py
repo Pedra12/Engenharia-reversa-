@@ -353,14 +353,24 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             mi.mesh=mesh
             mi.material_override=_mat(mats)
             n.add_child(mi)
+    # Physics fallback: many recovered Unity render meshes have no MeshCollider
+    # component in the extracted scene graph. Use their static triangle surface so
+    # the player cannot fall through floors, dunes, ramps or building platforms.
+    var collision_mesh:Mesh=null
     if colpath!="":
-        var cm=load("res://assets/meshes/"+colpath.get_file()) as Mesh
-        if cm:
-            var body=StaticBody3D.new()
-            var cs=CollisionShape3D.new()
-            cs.shape=cm.create_trimesh_shape()
-            body.add_child(cs)
-            n.add_child(body)
+        collision_mesh=load("res://assets/meshes/"+colpath.get_file()) as Mesh
+    if collision_mesh==null and renderpath!="":
+        collision_mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
+    if collision_mesh:
+        var body=StaticBody3D.new()
+        body.name="RecoveredSurfaceCollision"
+        body.collision_layer=1
+        body.collision_mask=1
+        var cs=CollisionShape3D.new()
+        cs.name="TriangleSurface"
+        cs.shape=collision_mesh.create_trimesh_shape()
+        body.add_child(cs)
+        n.add_child(body)
     for ch in d.get("children",[]):
         _build_node(ch,n,map_id)
 func _ref(c:Dictionary,key:String)->String:
@@ -490,12 +500,17 @@ func _start_walk_mode():
     player.name="ExplorerPlayer"
     world.add_child(player)
     var capsule=CapsuleShape3D.new()
-    capsule.radius=0.36
+    capsule.radius=0.32
     capsule.height=1.75
     var collision=CollisionShape3D.new()
     collision.shape=capsule
     collision.position.y=0.9
     player.add_child(collision)
+    player.motion_mode=CharacterBody3D.MOTION_MODE_GROUNDED
+    player.floor_snap_length=0.42
+    player.floor_max_angle=deg_to_rad(52.0)
+    player.safe_margin=0.025
+    player.max_slides=8
     walk_camera=Camera3D.new()
     walk_camera.position=Vector3(0,1.55,0)
     walk_camera.fov=75.0
@@ -574,8 +589,24 @@ func _physics_process(delta):
     var forward=Vector3(-sin(walk_yaw),0.0,-cos(walk_yaw))
     var right=Vector3(cos(walk_yaw),0.0,-sin(walk_yaw))
     var direction=(right*input_dir.x+forward*input_dir.z).normalized()
-    player.velocity.x=direction.x*5.0
-    player.velocity.z=direction.z*5.0
+    player.velocity.x=direction.x*4.5
+    player.velocity.z=direction.z*4.5
+    var horizontal_motion=Vector3(player.velocity.x,0.0,player.velocity.z)*delta
+    # Step assist: lift over stair risers, move forward, then snap down onto
+    # the next tread. This keeps ordinary walls solid and avoids jump-spamming.
+    if player.is_on_floor() and horizontal_motion.length()>0.001 and player.test_move(player.global_transform,horizontal_motion):
+        var raised=player.global_transform
+        raised.origin+=Vector3.UP*0.42
+        if not player.test_move(raised,horizontal_motion):
+            var forward=raised
+            forward.origin+=horizontal_motion
+            var landing=KinematicCollision3D.new()
+            if player.test_move(forward,Vector3.DOWN*0.56,landing):
+                if landing.get_normal().dot(Vector3.UP)>0.65:
+                    var landed=forward
+                    landed.origin+=landing.get_travel()
+                    player.global_transform=landed
+                    player.velocity.y=minf(player.velocity.y,0.0)
     player.move_and_slide()
 func _pan(delta:Vector2):
     if not camera_pivot or not camera:
