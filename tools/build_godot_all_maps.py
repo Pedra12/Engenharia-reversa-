@@ -623,33 +623,56 @@ func _audit_all_maps():
                             collision_name=String(slide.get_collider().name)
                     print("ASSAULT_DIRECTION_TEST direction=",direction," start=",test_origin," end=",end_position," velocity=",player.velocity," collisions=",player.get_slide_collision_count()," collider=",collision_name," travelled=",travelled)
             move_vector=Vector2.ZERO
-        if MAPS[index]=="lvl_resort" and is_instance_valid(player):
-            var stair_probe=Vector3(-2.297,0,-17.856)
-            var stair_query=PhysicsRayQueryParameters3D.create(stair_probe+Vector3.UP*40.0,stair_probe-Vector3.UP*40.0)
-            stair_query.collision_mask=1
-            stair_query.hit_back_faces=true
-            stair_query.exclude=[player.get_rid()]
-            var stair_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
-            if not stair_hit.is_empty() and abs(stair_hit.normal.dot(Vector3.UP))>0.70:
-                player.global_position=stair_hit.position+Vector3.UP*0.08
-                player.velocity=Vector3.ZERO
-                for frame in range(8):
-                    await get_tree().physics_frame
-                var stair_start=player.global_position
-                var saved_stair_yaw=walk_yaw
-                walk_yaw=0.0
-                move_vector=Vector2(0,-1)
-                for frame in range(45):
-                    await get_tree().physics_frame
-                move_vector=Vector2.ZERO
-                walk_yaw=saved_stair_yaw
-                var climb_height=player.global_position.y-stair_start.y
-                print("STAIR_ROUTE_AUDIT map=lvl_resort grounded=",player.is_on_floor()," climb_height=",climb_height)
-                if climb_height<0.60:
+        var stair_routes=manifest.get("stair_route_candidates",[]) if manifest is Dictionary else []
+        if is_instance_valid(player) and stair_routes.size()>0:
+            var route=stair_routes[0]
+            var stair_node=String(route.get("node",""))
+            var stair_body=world.find_child("RecoveredUnityCollider_"+stair_node,true,false) as StaticBody3D
+            var start_data=route.get("start",[])
+            var end_data=route.get("end",[])
+            if is_instance_valid(stair_body) and start_data.size()==3 and end_data.size()==3:
+                var start_point=Vector3(float(start_data[0]),float(start_data[1]),float(start_data[2]))
+                var end_point=Vector3(float(end_data[0]),float(end_data[1]),float(end_data[2]))
+                var space=get_world_3d().direct_space_state
+                var start_query=PhysicsRayQueryParameters3D.create(start_point+Vector3.UP*1.0,start_point-Vector3.UP*1.0)
+                start_query.collision_mask=1
+                start_query.exclude=[player.get_rid()]
+                var end_query=PhysicsRayQueryParameters3D.create(end_point+Vector3.UP*1.0,end_point-Vector3.UP*1.0)
+                end_query.collision_mask=1
+                end_query.exclude=[player.get_rid()]
+                var start_hit=space.intersect_ray(start_query)
+                var end_hit=space.intersect_ray(end_query)
+                if not start_hit.is_empty() and not end_hit.is_empty() and start_hit.get("collider")==stair_body and end_hit.get("collider")==stair_body:
+                    player.global_position=start_hit.position+Vector3.UP*0.08
+                    player.velocity=Vector3.ZERO
+                    for frame in range(8):
+                        await get_tree().physics_frame
+                    var stair_start=player.global_position
+                    var horizontal_target=Vector3(end_hit.position.x,stair_start.y,end_hit.position.z)
+                    var stair_direction=(horizontal_target-stair_start).normalized()
+                    walk_yaw=atan2(-stair_direction.x,-stair_direction.z)
+                    move_vector=Vector2(0,-1)
+                    var stair_frames=clampi(int(ceil(float(route.get("horizontal_distance",1.0))/4.5*60.0))+4,8,35)
+                    for frame in range(stair_frames):
+                        await get_tree().physics_frame
+                        var remaining=Vector2(player.global_position.x-end_hit.position.x,player.global_position.z-end_hit.position.z).length()
+                        if player.global_position.y>=end_hit.position.y-0.08 and remaining<0.60:
+                            break
+                    move_vector=Vector2.ZERO
+                    var climb_height=player.global_position.y-stair_start.y
+                    var expected_rise=end_hit.position.y-start_hit.position.y
+                    print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",stair_node," grounded=",player.is_on_floor()," climb_height=",climb_height," expected_rise=",expected_rise," steps=",route.get("steps"))
+                    if not player.is_on_floor() or climb_height<maxf(0.12,expected_rise*0.45):
+                        failed=true
+                else:
+                    print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",stair_node," hit=false start_hit=",not start_hit.is_empty()," end_hit=",not end_hit.is_empty())
                     failed=true
             else:
-                print("STAIR_ROUTE_AUDIT map=lvl_resort hit=false")
+                print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",stair_node," collider_missing=",not is_instance_valid(stair_body))
                 failed=true
+        else:
+            print("STAIR_ROUTE_AUDIT map=",MAPS[index]," candidate_missing=true")
+            failed=true
         print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," max_cardinal_displacement=",max_displacement)
         if not grounded or not moved or max_displacement<0.50:
             failed=true
