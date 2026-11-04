@@ -428,7 +428,11 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             if object_name.contains(token): forbidden=true
         var bounds=render_mesh.get_aabb().size
         var horizontal=maxf(bounds.x,bounds.z)
-        if not forbidden and horizontal>8.0 and bounds.y< horizontal*0.16:
+        # India uses a large central terrain mesh without a Unity MeshCollider.
+        # It is the main walkable surface, not decorative scenery.
+        if map_id=="lvl_india" and object_name=="umsh_india_s2":
+            collision_mesh=render_mesh
+        elif not forbidden and horizontal>8.0 and bounds.y< horizontal*0.16:
             collision_mesh=render_mesh
     if collision_mesh:
         var body=StaticBody3D.new()
@@ -554,6 +558,29 @@ func _audit_all_maps():
         print("MAP_AUDIT id=",MAPS[index]," meshes=",mesh_count," expected_meshes=",expected_meshes," colliders=",collider_count," root_children=",node_count)
         if mesh_count<expected_meshes or collider_count==0:
             failed=true
+        await _start_walk_mode()
+        for frame in range(4):
+            await get_tree().physics_frame
+        var grounded=is_instance_valid(player) and player.is_on_floor()
+        var moved=false
+        if is_instance_valid(player):
+            var test_origin=player.global_position
+            for direction in [Vector2(0,-1),Vector2(0,1),Vector2(1,0),Vector2(-1,0)]:
+                player.global_position=test_origin
+                player.velocity=Vector3.ZERO
+                move_vector=direction
+                for frame in range(12):
+                    await get_tree().physics_frame
+                var travelled=Vector2(player.global_position.x-test_origin.x,player.global_position.z-test_origin.z).length()
+                if travelled>0.20:
+                    moved=true
+                    break
+            move_vector=Vector2.ZERO
+        print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved)
+        if not grounded or not moved:
+            failed=true
+        _stop_walk_mode()
+        await get_tree().process_frame
     if failed:
         print("BLOCKGUN_ALL_MAPS_AUDIT_FAILED")
         get_tree().quit(1)
