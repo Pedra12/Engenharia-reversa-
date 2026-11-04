@@ -165,9 +165,18 @@ def main():
   level=d.get("source_level","")
   level_meshes=sorted(str(p.relative_to(GRAPH)) for p in (GRAPH/"exported_meshes").glob(level+"__*.obj")) if (GRAPH/"exported_meshes").exists() else []
   for obj in level_meshes: geometry[obj]=obj_stats(obj)
-  stair_routes=[]\n  for c in colliders:\n   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"]))\n  stair_routes.sort(key=lambda r:(r["steps"],r["rise"],-abs(r["horizontal_distance"]-1.0)),reverse=True)\n  report={"map":f.stem,"unity_level":level,"stair_route_candidates":stair_routes,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"scale_y":c["scale_y"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
+  stair_routes=[]
+  for c in colliders:
+   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"]))
+  stair_routes.sort(key=lambda r:(r["steps"],r["rise"],-abs(r["horizontal_distance"]-1.0)),reverse=True)
+  report={"map":f.stem,"unity_level":level,"stair_route_candidates":stair_routes,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"scale_y":c["scale_y"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
   reports.append(report); global_missing+=report["missing_exports"]
-  (OUT/(f.stem+"_QUALITY_AUDIT.json")).write_text(json.dumps(report,indent=2,ensure_ascii=False))\n  godot_manifest=pathlib.Path("godot_project/data")/(f.stem+".json")\n  if godot_manifest.exists():\n   godot_data=json.loads(godot_manifest.read_text())\n   godot_data["stair_route_candidates"]=stair_routes\n   godot_manifest.write_text(json.dumps(godot_data,ensure_ascii=False),encoding="utf-8")
+  (OUT/(f.stem+"_QUALITY_AUDIT.json")).write_text(json.dumps(report,indent=2,ensure_ascii=False))
+  godot_manifest=pathlib.Path("godot_project/data")/(f.stem+".json")
+  if godot_manifest.exists():
+   godot_data=json.loads(godot_manifest.read_text())
+   godot_data["stair_route_candidates"]=stair_routes
+   godot_manifest.write_text(json.dumps(godot_data,ensure_ascii=False),encoding="utf-8")
   print("MAP_QUALITY_AUDIT",json.dumps({k:v for k,v in report.items() if not isinstance(v,(list,dict))},ensure_ascii=False))
  summary={"maps":len(reports),"missing_asset_references":global_missing,"results":reports}
  (OUT/"BLOCKGUN_MAP_QUALITY_AUDIT.json").write_text(json.dumps(summary,indent=2,ensure_ascii=False))
