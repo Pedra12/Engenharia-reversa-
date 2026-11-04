@@ -689,8 +689,8 @@ func _start_walk_mode():
         var best_clearance=-1
         var best_floor=Vector3.ZERO
         var offsets=[]
-        for x in [-16.0,-8.0,-4.0,0.0,4.0,8.0,16.0]:
-            for z in [-16.0,-8.0,-4.0,0.0,4.0,8.0,16.0]:
+        for x in [-8.0,0.0,8.0]:
+            for z in [-8.0,0.0,8.0]:
                 offsets.append(Vector3(x,0.0,z))
         var test_directions=[Vector3.FORWARD,Vector3.BACK,Vector3.LEFT,Vector3.RIGHT]
         for base_point in candidate_points:
