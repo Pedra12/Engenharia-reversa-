@@ -97,10 +97,15 @@ jobs:
           android/java_sdk_path = "$JAVA_HOME"
           EOF
       - name: Export Android preview APK
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p godot_project/build
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project --export-debug Android godot_project/build/BlockGunMapsPreview.apk
+          mkdir -p "$HOME/.android" godot_project/build
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android godot_project/build/BlockGunMapsPreview.apk
           test -s godot_project/build/BlockGunMapsPreview.apk
           ls -lh godot_project/build/BlockGunMapsPreview.apk
       - name: Upload Android preview APK
