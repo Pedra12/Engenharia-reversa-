@@ -436,7 +436,7 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     # Static-batched renderer geometry is exported as a sliced world-space mesh.
     # A separate Unity MeshCollider reference can still point to the unsliced
     # combined source mesh; using it with the GameObject transform traps players.
-    var static_batched_collision=bool(d.get("godot_static_batched",false)) and render_mesh!=null and colpath!=""
+    var static_batched_collision=bool(d.get("godot_static_batched_collider",false)) and render_mesh!=null and colpath!=""
     if static_batched_collision:
         collision_mesh=render_mesh
     elif colpath!="":
