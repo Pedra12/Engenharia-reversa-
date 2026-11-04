@@ -442,7 +442,7 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             collision_mesh=render_mesh
     if collision_mesh:
         var body=StaticBody3D.new()
-        body.name="RecoveredUnityCollider"
+        body.name="RecoveredUnityCollider_"+n.name
         body.collision_layer=1
         body.collision_mask=1
         var cs=CollisionShape3D.new()
@@ -718,6 +718,16 @@ func _start_walk_mode():
                     continue
                 var candidate_transform=player.global_transform
                 candidate_transform.origin=floor_hit.position+Vector3.UP*0.06
+                # test_move alone does not reject a body that already starts
+                # intersecting a wall/solid mesh. Query the actual capsule volume.
+                var overlap_query=PhysicsShapeQueryParameters3D.new()
+                overlap_query.shape=capsule
+                overlap_query.transform=candidate_transform*collision.transform
+                overlap_query.collision_mask=1
+                overlap_query.exclude=[player.get_rid()]
+                var overlaps=get_world_3d().direct_space_state.intersect_shape(overlap_query,8)
+                if not overlaps.is_empty():
+                    continue
                 var clear_directions=0
                 for direction in test_directions:
                     if not player.test_move(candidate_transform,direction*4.5):
@@ -730,7 +740,7 @@ func _start_walk_mode():
                     best_found=true
         if best_found:
             player.global_position=best_floor+Vector3.UP*0.06
-            print("WALK_SPAWN_SURFACE point=",best_floor," distance_from_center=",best_distance," clear_directions=",best_clearance)
+            print("WALK_SPAWN_SURFACE point=",best_floor," distance_from_center=",best_distance," clear_directions=",best_clearance," capsule_overlaps=0")
         else:
             player.global_position=camera_pivot.global_position+Vector3.UP*8.0
             print("WALK_SPAWN_FALLBACK point=",player.global_position)
