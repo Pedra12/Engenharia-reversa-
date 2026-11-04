@@ -616,6 +616,37 @@ func _audit_all_maps():
                             collision_name=String(slide.get_collider().name)
                     print("ASSAULT_DIRECTION_TEST direction=",direction," start=",test_origin," end=",end_position," velocity=",player.velocity," collisions=",player.get_slide_collision_count()," collider=",collision_name," travelled=",travelled)
             move_vector=Vector2.ZERO
+        if MAPS[index]=="lvl_resort" and is_instance_valid(player):
+            var stair_node=world.find_child("umsh_resort_s2",true,false) as Node3D
+            if is_instance_valid(stair_node):
+                # Geometry audit found a seven-tread staircase in this original collision mesh.
+                var lower_tread=stair_node.global_transform*Vector3(5.21,-8.87,13.70)
+                var stair_query=PhysicsRayQueryParameters3D.create(lower_tread+Vector3.UP*2.0,lower_tread-Vector3.UP*2.0)
+                stair_query.collision_mask=1
+                stair_query.exclude=[player.get_rid()]
+                var stair_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
+                if not stair_hit.is_empty() and stair_hit.normal.dot(Vector3.UP)>0.70:
+                    player.global_position=stair_hit.position+Vector3.UP*0.08
+                    player.velocity=Vector3.ZERO
+                    for frame in range(12):
+                        await get_tree().physics_frame
+                    var stair_start=player.global_position
+                    move_vector=Vector2(0,-1)
+                    for frame in range(45):
+                        await get_tree().physics_frame
+                    move_vector=Vector2.ZERO
+                    var stair_end=player.global_position
+                    var climb_height=stair_end.y-stair_start.y
+                    var stair_forward=stair_end.z-stair_start.z
+                    print("STAIR_ROUTE_AUDIT map=lvl_resort grounded=",player.is_on_floor()," start=",stair_start," end=",stair_end," climb_height=",climb_height," forward_z=",stair_forward)
+                    if climb_height<0.60 or stair_forward>-0.40:
+                        failed=true
+                else:
+                    print("STAIR_ROUTE_AUDIT map=lvl_resort hit=false point=",lower_tread)
+                    failed=true
+            else:
+                print("STAIR_ROUTE_AUDIT map=lvl_resort stair_mesh_missing")
+                failed=true
         print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," max_cardinal_displacement=",max_displacement)
         if not grounded or not moved or max_displacement<0.50:
             failed=true
