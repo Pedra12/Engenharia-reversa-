@@ -23,7 +23,7 @@ jobs:
           curl -fL --retry 3 --retry-delay 2 "$URL" -o blockgun.zip
           echo "Downloaded bytes: $(stat -c%s blockgun.zip)"
           sha256sum blockgun.zip
-      - name: Inspect archive and extract key metadata
+      - name: Deep inventory and readiness checks
         shell: bash
         run: |
           set -euo pipefail
@@ -34,35 +34,57 @@ jobs:
           names=[i.filename for i in infos if not i.is_dir()]
           sizes={i.filename:i.file_size for i in infos}
           ext=collections.Counter(os.path.splitext(n)[1].lower() or '[sem extensão]' for n in names)
-          roots=collections.Counter(n.split('/')[0] for n in names)
-          out=['# Relatório de inspeção: Block Gun 3D 2.0.3','']
-          out += [f'- Entradas totais: {len(infos)}',f'- Arquivos: {len(names)}',f'- Tamanho descompactado declarado: {sum(i.file_size for i in infos):,} bytes',f'- Tamanho comprimido: {os.path.getsize("blockgun.zip"):,} bytes','']
-          out += ['## Pastas/itens de primeiro nível']+[f'- {k}: {v} entradas' for k,v in roots.most_common(80)]
-          out += ['', '## Tipos de arquivo (contagem)']+[f'- {k}: {v}' for k,v in ext.most_common(100)]
-          out += ['', '## Estrutura Unity'] 
+          out=['# Relatório técnico aprofundado: Block Gun 3D 2.0.3','']
+          out += [f'- Arquivos: {len(names)}',f'- Tamanho descompactado: {sum(i.file_size for i in infos):,} bytes',f'- Tamanho ZIP: {os.path.getsize("blockgun.zip"):,} bytes','']
+          out += ['## Diagnóstico de prontidão']
+          checks=[
+           ('Projeto Unity editável (ProjectSettings + Packages/manifest.json)', any(n.endswith('ProjectSettings/ProjectVersion.txt') for n in names) and any(n.endswith('Packages/manifest.json') for n in names)),
+           ('Cenas Unity originais (.unity)', any(n.lower().endswith('.unity') for n in names)),
+           ('Prefabs Unity originais (.prefab)', any(n.lower().endswith('.prefab') for n in names)),
+           ('Modelos OBJ recuperados', ext['.obj']>0),
+           ('Modelos FBX/GLTF/GLB recuperados', sum(ext[x] for x in ['.fbx','.gltf','.glb'])>0),
+           ('Scripts C# recuperados', ext['.cs']>0),
+           ('Dump IL2CPP recuperado', any('script.json' in n or 'dump.cs' in n for n in names)),
+           ('Dependências Unity declaradas (manifest.json)', any(n.endswith('Packages/manifest.json') for n in names)),
+           ('Projeto C# (csproj)', ext['.csproj']>0),
+           ('Manifest Android recuperado', any(n.endswith('AndroidManifest.xml') for n in names)),
+          ]
+          for label,ok in checks: out.append(f'- {"[SIM]" if ok else "[NÃO]"} {label}')
+          out += ['', '## Extensões e volumes']+[f'- {k}: {v}' for k,v in ext.most_common(70)]
+          out += ['', '## Arquivos de configuração e documentação']
+          config=[n for n in names if re.search(r'(README|NOTES|\.csproj$|manifest\.json$|ProjectVersion\.txt$|\.asmdef$|\.meta$)',n,re.I)]
+          out += [f'- {n} ({sizes[n]:,} bytes)' for n in config[:250]]
+          out += ['', '## Distribuição dos recursos Unity']
           unity=[n for n in names if n.startswith('unity/')]
-          out += [f'- Arquivos dentro de unity/: {len(unity)}']
-          dirs=collections.Counter('/'.join(n.split('/')[:3]) for n in unity)
-          out += [f'- {k}: {v} arquivos' for k,v in dirs.most_common(80)]
-          out += ['', '## Arquivos-chave do código C#']
-          keyfiles=['unity/scripts/csharp/PlayerController.cs','unity/scripts/csharp/AIController.cs','unity/scripts/csharp/WeaponBase.cs','unity/scripts/csharp/WeaponManager.cs','unity/scripts/csharp/PhotonManager.cs','unity/scripts/csharp/PhotonCharacterBase.cs','unity/scripts/csharp/TeamDeathMatchMode.cs','unity/scripts/csharp/FreeForAllMode.cs','unity/scripts/csharp/EliminationMode.cs','unity/scripts/csharp/BombMode.cs','unity/scripts/csharp/MapSelector.cs','unity/scripts/csharp/SpawnPointManager.cs','unity/scripts/csharp/InputManager.cs','unity/scripts/csharp/MouseLook.cs','unity/scripts/csharp/TouchButtonInteractable.cs','unity/scripts/csharp/PlayerUIController.cs','unity/scripts/csharp/WeaponLoader.cs','unity/scripts/csharp/BotInstantiationData.cs']
-          for p in keyfiles:
-            if p not in names: continue
-            try: s=z.read(p).decode('utf-8','replace')
-            except: continue
-            classes=re.findall(r'\b(?:class|struct|enum|interface)\s+([A-Za-z_]\w*)',s)
-            methods=re.findall(r'^\s*(?:public|private|protected|internal)\s+(?:static\s+|virtual\s+|override\s+|async\s+|new\s+)*(?:[\w<>\[\],.?]+\s+)+([A-Za-z_]\w*)\s*\(',s,re.M)
-            out += [f'### {p}',f'- Tamanho: {sizes[p]:,} bytes',f'- Classes/tipos: {", ".join(classes[:20]) or "não identificados"}',f'- Métodos: {", ".join(methods[:35]) or "não identificados"}']
-          out += ['', '## Arquivos relevantes (amostra)']
-          pats=re.compile(r'(AndroidManifest.xml|\.smali$|\.java$|\.kt$|\.so$|\.dex$|\.unity$|\.asset$|\.bundle$|\.obb$|\.pak$|\.uasset$|\.umap$|\.fbx$|\.obj$|\.gltf$|\.glb$|\.png$|\.jpg$|\.webp$|\.ogg$|\.wav$|\.mp3$|\.ttf$|\.otf$|\.json$|\.xml$|\.lua$|\.cs$)',re.I)
-          matches=[n for n in names if pats.search(n)]
-          out += [f'- {n} ({sizes[n]:,} bytes)' for n in matches[:300]]
-          if len(matches)>300: out += [f'- ... mais {len(matches)-300} arquivos relevantes omitidos']
-          out += ['', '## Conclusão técnica inicial','- O pacote contém código Android decompilado (Java/Smali) e uma extração de projeto Unity/IL2CPP com dump de C#, scripts, bibliotecas nativas e recursos gráficos/áudio.','- A presença de classes de Photon e de modos de jogo sugere componentes de rede/multiplayer, mas a disponibilidade funcional dos servidores e serviços não foi validada.','- Inventário e assinaturas de código não provam que o projeto recompila como um projeto Unity original; faltam cenas/projeto-fonte e dependências originais verificadas.','- Reutilização de código, modelos e áudio depende de direitos/licenças.']
+          groups=collections.Counter('/'.join(n.split('/')[:3]) for n in unity)
+          out += [f'- {k}: {v}' for k,v in groups.most_common(100)]
+          out += ['', '## Amostra de modelos 3D OBJ']
+          objs=[n for n in names if n.lower().endswith('.obj')]
+          out += [f'- {n} ({sizes[n]:,} bytes)' for n in sorted(objs,key=lambda n:sizes[n],reverse=True)[:100]]
+          out += ['', '## Amostra de sprites e texturas']
+          imgs=[n for n in names if os.path.splitext(n)[1].lower() in ['.png','.jpg','.jpeg','.webp']]
+          out += [f'- {n} ({sizes[n]:,} bytes)' for n in sorted(imgs,key=lambda n:sizes[n],reverse=True)[:80]]
+          out += ['', '## Scripts centrais e tamanho']
+          terms=['PlayerController','AIController','WeaponBase','WeaponManager','WeaponLoader','PhotonManager','PhotonCharacterBase','TeamDeathMatchMode','FreeForAllMode','EliminationMode','BombMode','MapSelector','SpawnPointManager','InputManager','MouseLook','TouchButtonInteractable','PlayerUIController','LocalAnimator','MoveJoystickRunAbility','CameraIdentity','Crosshair','FootStepsLibrary']
+          cs=[n for n in names if n.startswith('unity/scripts/csharp/') and n.endswith('.cs')]
+          for term in terms:
+           for p in [n for n in cs if term.lower() in os.path.basename(n).lower()][:5]: out.append(f'- {p}: {sizes[p]:,} bytes')
+          out += ['', '## Documentação/dump']
+          docs=[n for n in names if n.lower().endswith(('.txt','.md','.csproj')) or n.endswith('ProjectVersion.txt') or n.endswith('manifest.json')]
+          for p in docs[:20]:
+           try: s=z.read(p)[:10000].decode('utf-8','replace')
+           except: continue
+           out += [f'### {p}', s[:4000], '']
+          out += ['## Conclusão e próximos requisitos',
+           '- O ZIP é uma extração/decompilação extensa, não um projeto Unity original pronto: o projeto editável exige cenas, prefabs, ProjectSettings, versão do editor e manifesto de pacotes.',
+           '- Os arquivos OBJ são malhas geométricas; verificar material, UV, rig, esqueleto e animações é necessário antes de usar personagens em jogo.',
+           '- Dados serializados e dump IL2CPP ajudam a reconstruir referências, mas não equivalem a cenas/prefabs restaurados.',
+           '- Para um APK próprio será necessário montar projeto Unity/Godot independente, reimplementar sistemas necessários e validar dependências/licenças.',
+           '- Multiplayer Photon: código cliente identificado, mas servidores, credenciais e compatibilidade de backend não foram confirmados.']
           open('BLOCKGUN_ANALYSIS.md','w',encoding='utf-8').write('\n'.join(out)+'\n')
-          print('\n'.join(out[:180]))
+          print('\n'.join(out[:220]))
           PY
-      - name: Publish inventory report
+      - name: Publish report
         uses: actions/github-script@v7
         with:
           script: |
@@ -75,11 +97,7 @@ jobs:
               sha = existing.data.sha;
             } catch (e) {}
             await github.rest.repos.createOrUpdateFileContents({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              message: 'Expand Block Gun archive technical analysis',
-              content,
-              ...(sha ? {sha} : {}),
-              branch: 'main'
+              owner: context.repo.owner, repo: context.repo.repo, path,
+              message: 'Add deep technical readiness assessment for Block Gun archive',
+              content, ...(sha ? {sha} : {}), branch: 'main'
             });
