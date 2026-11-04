@@ -598,12 +598,12 @@ func _physics_process(delta):
         var raised=player.global_transform
         raised.origin+=Vector3.UP*0.42
         if not player.test_move(raised,horizontal_motion):
-            var forward=raised
-            forward.origin+=horizontal_motion
+            var step_forward=raised
+            step_forward.origin+=horizontal_motion
             var landing=KinematicCollision3D.new()
-            if player.test_move(forward,Vector3.DOWN*0.56,landing):
+            if player.test_move(step_forward,Vector3.DOWN*0.56,landing):
                 if landing.get_normal().dot(Vector3.UP)>0.65:
-                    var landed=forward
+                    var landed=step_forward
                     landed.origin+=landing.get_travel()
                     player.global_transform=landed
                     player.velocity.y=minf(player.velocity.y,0.0)
