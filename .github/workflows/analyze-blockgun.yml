@@ -9,6 +9,7 @@ on:
       - "tools/unity_asset_audit.py"
       - "tools/unity_scene_graph.py"
       - "tools/build_godot_preview.py"
+      - "tools/build_godot_all_maps.py"
   workflow_dispatch:
 
 permissions:
@@ -43,8 +44,8 @@ jobs:
         run: python3 tools/unity_asset_audit.py
       - name: Build relational Unity scene graph
         run: python3 tools/unity_scene_graph.py
-      - name: Generate Godot Forest reconstruction preview
-        run: python3 tools/build_godot_preview.py
+      - name: Generate Godot project with all recovered maps
+        run: python3 tools/build_godot_all_maps.py
       - name: Validate generated project with Godot 4.4.1
         shell: bash
         run: |
