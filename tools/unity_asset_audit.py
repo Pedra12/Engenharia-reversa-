@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Reconstrói arquivos Unity divididos em .splitN e extrai objetos via UnityPy."""
-import zipfile, pathlib, tempfile, json, csv, re, collections, os
+import zipfile, pathlib, tempfile, json, csv, re, collections, os, hashlib
 from pathlib import PurePosixPath
 ARCHIVE=pathlib.Path("blockgun.zip")
 OUT=pathlib.Path("unity_audit"); OUT.mkdir(exist_ok=True)
 EXPORT=OUT/"exported"; EXPORT.mkdir(exist_ok=True)
 rows=[]; errors=[]; counts=collections.Counter(); previews=[]
+skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; library_rows=[]
 DATA_PREFIX="resources/assets/bin/Data/"
 
 def safe(s):
@@ -14,6 +15,27 @@ def safe(s):
 def save(path,data):
     path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(data)
 
+def json_safe(value, depth=0):
+    if depth > 10:
+        return str(value)
+    if value is None or isinstance(value,(str,int,float,bool)):
+        return value
+    if isinstance(value,bytes):
+        return {"byte_length":len(value)}
+    if isinstance(value,(list,tuple)):
+        return [json_safe(v,depth+1) for v in value]
+    if isinstance(value,dict):
+        return {str(k):json_safe(v,depth+1) for k,v in value.items()}
+    if hasattr(value,"__dict__"):
+        return {str(k):json_safe(v,depth+1) for k,v in vars(value).items() if k not in ("reader","assets_file")}
+    return str(value)
+def selected_fields(data, names):
+    out={}
+    for name in names:
+        if hasattr(data,name):
+            try: out[name]=json_safe(getattr(data,name))
+            except Exception as e: out[name]={"error":str(e)[:200]}
+    return out
 def main():
     import UnityPy
     from PIL import Image, ImageDraw
@@ -75,6 +97,18 @@ def main():
                     row={"source":source[:220],"path_id":str(pid),"type":typ,"name":str(name)[:250],"status":"metadata"}
                     counts[typ]+=1
                     base=safe(pathlib.Path(source).stem)+"_"+safe(typ)+"_"+safe(name or pid)
+                    if typ=="Mesh" and (str(name).startswith("sk_char_") or str(name) in ("sk_gloves","sk_bomb_fp")):
+                        skin_records.append({"source":source,"path_id":str(pid),"name":str(name),
+                          "fields":selected_fields(data,["m_Vertices","m_Normals","m_UV0","m_Skin","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_SubMeshes"])})
+                    elif typ=="AnimationClip":
+                        animation_records.append({"source":source,"path_id":str(pid),"name":str(name),
+                          "fields":selected_fields(data,["m_SampleRate","m_Legacy","m_Compressed","m_UseHighQualityCurve","m_RotationCurves","m_PositionCurves","m_ScaleCurves","m_FloatCurves","m_PPtrCurves","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings"])})
+                    elif typ=="AnimatorController":
+                        controller_records.append({"source":source,"path_id":str(pid),"name":str(name),
+                          "fields":selected_fields(data,["m_AnimatorLayers","m_AnimatorParameters","m_Controller"])})
+                    elif typ=="Avatar":
+                        avatar_records.append({"source":source,"path_id":str(pid),"name":str(name),
+                          "fields":selected_fields(data,["m_Avatar","m_TOS","m_Name"])})
                     if typ in ("Texture2D","Sprite"):
                         try:
                             im=data.image
@@ -109,6 +143,46 @@ def main():
                     rows.append(row)
                 except Exception as e:
                     errors.append("object "+str(getattr(obj,"path_id",idx))+": "+str(e)[:250])
+    # Preserve a curated, traceable library of gameplay assets and source stubs.
+    source_assets=OUT/"source_assets"
+    source_scripts=OUT/"source_scripts"
+    script_names=[
+      "GameManager.cs","GameModeBase.cs","GameModeData.cs","TeamDeathMatchMode.cs",
+      "PlayerController.cs","PlayerInstantiationData.cs","PlayerUIController.cs","PhotonPlayerInput.cs",
+      "PhotonPlayerCharacter.cs","PhotonAIInput.cs","PhotonAICharacter.cs","BotInstantiationData.cs",
+      "AIController.cs","AIBehaviorData.cs","WeaponBase.cs","Weapon.cs","WeaponLoader.cs",
+      "WeaponManager.cs","WeaponAnimation.cs","LocalWeapon.cs","LocalAnimator.cs","RemoteAnimator.cs",
+      "SpawnPointManager.cs","SpawnPoint.cs","Bullet.cs","BulletData.cs","Projectile.cs","PhotonHealth.cs",
+      "DamageIndicator.cs","InputManager.cs","Crosshair.cs","WindowMainMenu.cs","MainMenuTutorialController.cs",
+      "TutorialController.cs","InGameInputController.cs","WindowGameMode.cs","WindowLobby.cs",
+      "DialogMatchResult.cs","FollowCamerasManager.cs","CameraIdentity.cs"
+    ]
+    for n in names:
+        base_name=PurePosixPath(n).name
+        if n.startswith("unity/scripts/csharp/") and base_name in script_names:
+            dest=source_scripts/PurePosixPath(n).relative_to("unity/scripts/csharp")
+            blob=z.read(n); save(dest,blob)
+            library_rows.append({"category":"script_stub","original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    model_tokens=("sk_char_","m4a1_1.obj","AK_47_2.obj","MP5_794","AWP_2.obj","M249_2.obj","Desert_Eagle_2.obj","M1014_3.obj","Famas_4.obj","P90_1.obj","UMP_45_2.obj")
+    texture_tokens=("SimpleMilitary_Soldier01_Black","AK_47_Diffuse","M4A1_Diffuse","MP5_Diffuse","AWP_Diffuse","M249_Diffuse","Desert_Eagle_Diffuse","M1014_Diffuse","Famas_Diffuse","P90_Diffuse","UMP_45_Diffuse","ui_icon_weapon_m4a1","ui_icon_weapon_ak_47","ui_icon_weapon_awp","ui_icon_weapon_mp5")
+    audio_tokens=("bg_menu_hazmob","bg_matchStart","bg_start_round","btn_start","ak47_fire","m4a1_fire","mp5_fire","awp_fire","reload","jump","footstep","footsteps","bullet_")
+    for n in sorted(names):
+        if n.startswith("unity/assets/meshes/") and n.lower().endswith(".obj") and any(t.lower() in PurePosixPath(n).name.lower() for t in model_tokens):
+            dest=source_assets/"meshes"/PurePosixPath(n).name
+        elif n.startswith(("unity/assets/textures/","unity/assets/sprites/")) and n.lower().endswith((".png",".jpg",".jpeg")) and any(t.lower() in PurePosixPath(n).name.lower() for t in texture_tokens):
+            dest=source_assets/("sprites" if "/sprites/" in n else "textures")/PurePosixPath(n).name
+        elif n.startswith("unity/assets/audio/") and n.lower().endswith((".wav",".ogg",".mp3")) and any(t.lower() in PurePosixPath(n).name.lower() for t in audio_tokens):
+            dest=source_assets/"audio"/PurePosixPath(n).name
+        else:
+            continue
+        blob=z.read(n); save(dest,blob)
+        library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
+    (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
+    (OUT/"UNITY_ANIMATOR_DATA.json").write_text(json.dumps({"controllers":controller_records,"avatars":avatar_records},ensure_ascii=False,indent=2),encoding="utf-8")
+    with open(OUT/"GAMEPLAY_ASSET_LIBRARY.csv","w",newline="",encoding="utf-8") as f:
+        w=csv.DictWriter(f,fieldnames=["category","original_path","exported_path","size_bytes","sha256"]); w.writeheader(); w.writerows(library_rows)
+    print("GAMEPLAY_LIBRARY",len(library_rows),"SKINNED_MESHES",len(skin_records),"ANIMATION_CLIPS",len(animation_records),"CONTROLLERS",len(controller_records),"AVATARS",len(avatar_records))
     with open(OUT/"UNITY_OBJECT_CATALOG.csv","w",newline="",encoding="utf-8") as f:
         fields=sorted({k for r in rows for k in r}); w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
     summary={"input_zip_bytes":ARCHIVE.stat().st_size,"split_families_reassembled":len(assembled),
