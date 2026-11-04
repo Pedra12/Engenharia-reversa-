@@ -223,7 +223,7 @@ func _make_menu():
     tutorial_title.add_theme_font_size_override("font_size",28)
     tutorial_box.add_child(tutorial_title)
     var tutorial_text=Label.new()
-    tutorial_text.text="1. Toque em JOGAR e escolha um cenário.\\n\\n2. Na prévia, arraste para girar a câmera e use dois dedos para aproximar.\\n\\n3. Toque em ENTRAR NO MAPA para explorar em primeira pessoa.\\n\\n4. No modo exploração, arraste no lado esquerdo para andar, no lado direito para olhar e use PULAR para saltar.\\n\\nO combate, os bots e as partidas completas ainda estão em desenvolvimento."
+    tutorial_text.text="1. Toque em JOGAR e escolha um cenário.\n\n2. Na prévia, arraste para girar a câmera e use dois dedos para aproximar.\n\n3. Toque em ENTRAR NO MAPA para explorar em primeira pessoa.\n\n4. No modo exploração, arraste no lado esquerdo para andar, no lado direito para olhar e use PULAR para saltar.\n\nO combate, os bots e as partidas completas ainda estão em desenvolvimento."
     tutorial_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     tutorial_text.size_flags_vertical=Control.SIZE_EXPAND_FILL
     tutorial_box.add_child(tutorial_text)
@@ -516,7 +516,7 @@ func _stop_walk_mode():
     if jump_button:
         jump_button.visible=false
     move_vector=Vector2.ZERO
-    map_label.text="CENÁRIO: "+world.name.replace("Map_","").to_upper()+" | PRÉVIA 3D"
+    map_label.text="CENÁRIO: "+String(world.name).replace("Map_","").to_upper()+" | PRÉVIA 3D"
 func _request_jump():
     if walk_mode and is_instance_valid(player) and player.is_on_floor():
         player.velocity.y=6.0
