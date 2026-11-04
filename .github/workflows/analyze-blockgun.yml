@@ -67,6 +67,8 @@ jobs:
         run: python3 tools/unity_scene_graph.py
       - name: Generate Godot project with all recovered maps
         run: python3 tools/build_godot_all_maps.py
+      - name: Audit every map assets, interiors and stair candidates
+        run: python3 tools/map_quality_audit.py
       - name: Validate generated project with Godot 4.4.1
         shell: bash
         run: |
