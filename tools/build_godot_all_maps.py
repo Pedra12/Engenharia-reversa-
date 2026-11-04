@@ -25,11 +25,13 @@ def slice_obj(source:pathlib.Path,destination:pathlib.Path,first:int,count:int):
     # one face group per static-batch submesh. Keep the global tables plus only
     # the faces assigned to this GameObject.
     usable=[g for g in groups if any(x.startswith("f ") for x in g)]
-    if count<=0 or not usable:
+    if count<=0:
         shutil.copy2(source,destination); return False
-    chosen=usable[max(0,first):max(0,first)+count]
-    if not chosen:
-        shutil.copy2(source,destination); return False
+    if not usable or first<0 or first+count>len(usable):
+        raise ValueError(f"Static batch range invalid for {source.name}: first={first}, count={count}, available={len(usable)}")
+    chosen=usable[first:first+count]
+    if len(chosen)!=count:
+        raise ValueError(f"Static batch range incomplete for {source.name}: first={first}, count={count}, selected={len(chosen)}")
     destination.write_text("\n".join(preamble+[line for group in chosen for line in group])+"\n",encoding="utf-8")
     return True
 
