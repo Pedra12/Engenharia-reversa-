@@ -49,6 +49,38 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.055, 0.075, 0.095, 1)
 ''',encoding="utf-8")
+    (PROJECT/"export_presets.cfg").write_text("""[preset.0]
+name="Android"
+platform="Android"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="build/BlockGunMapsPreview.apk"
+encryption_include_filters=""
+encryption_exclude_filters=""
+encrypt_pck=false
+encrypt_directory=false
+
+[preset.0.options]
+custom_template/debug=""
+custom_template/release=""
+gradle_build/use_gradle_build=false
+gradle_build/gradle_build_directory=""
+gradle_build/android_source_template=""
+gradle_build/compress_native_libraries=false
+architectures/armeabi-v7a=false
+architectures/arm64-v8a=true
+package/unique_name="com.pedra12.blockgunmaps"
+package/name="Block Gun Map Preview"
+package/launcher_icon=""
+package/icon=""
+package/signature=""
+package/ keystore=""
+screen/immersive_mode=true
+""",encoding="utf-8")
     (PROJECT/"main.tscn").write_text('[gd_scene load_steps=2 format=3]\n\n[ext_resource type="Script" path="res://main.gd" id="1"]\n\n[node name="BlockGunMaps" type="Node3D"]\nscript = ExtResource("1")\n',encoding="utf-8")
     gd=r'''extends Node3D
 const MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
