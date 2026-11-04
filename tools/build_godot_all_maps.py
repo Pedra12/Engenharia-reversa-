@@ -13,12 +13,17 @@ def slice_obj(source:pathlib.Path,destination:pathlib.Path,first:int,count:int):
         if line.startswith("g "):
             if current is not None: groups.append(current)
             current=[line]
+        elif line.startswith(("v ","vt ","vn ","mtllib ","o ")):
+            # OBJ vertex/UV/normal tables are global and must survive submesh slicing.
+            preamble.append(line)
         elif current is None:
             preamble.append(line)
         else:
             current.append(line)
     if current is not None: groups.append(current)
-    # UnityPy writes a parent group followed by one OBJ group per submesh.
+    # UnityPy writes a parent group containing shared vertex tables, followed by
+    # one face group per static-batch submesh. Keep the global tables plus only
+    # the faces assigned to this GameObject.
     usable=[g for g in groups if any(x.startswith("f ") for x in g)]
     if count<=0 or not usable:
         shutil.copy2(source,destination); return False
