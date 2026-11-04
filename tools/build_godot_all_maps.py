@@ -548,9 +548,11 @@ func _audit_all_maps():
         await get_tree().process_frame
         var mesh_count=_count_meshes(world) if is_instance_valid(world) else 0
         var collider_count=_count_colliders(world) if is_instance_valid(world) else 0
+        var manifest=JSON.parse_string(FileAccess.get_file_as_string("res://data/"+MAPS[index]+".json"))
+        var expected_meshes=maxi(0,int(manifest.get("node_count",1))-1) if manifest is Dictionary else 0
         var node_count=world.get_child_count() if is_instance_valid(world) else 0
-        print("MAP_AUDIT id=",MAPS[index]," meshes=",mesh_count," colliders=",collider_count," root_children=",node_count)
-        if mesh_count==0 or collider_count==0:
+        print("MAP_AUDIT id=",MAPS[index]," meshes=",mesh_count," expected_meshes=",expected_meshes," colliders=",collider_count," root_children=",node_count)
+        if mesh_count<expected_meshes or collider_count==0:
             failed=true
     if failed:
         print("BLOCKGUN_ALL_MAPS_AUDIT_FAILED")
