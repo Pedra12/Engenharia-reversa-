@@ -118,6 +118,7 @@ func _ready():
     _make_menu()
     # Always create a real 3D scene before showing the front end.
     _load_map("lvl_forest","Floresta")
+    _show_home()
     print("BLOCKGUN_BOOT_OK")
     print("BLOCKGUN_MAPS_READY count=",MAPS.size())
 func _make_menu():
@@ -126,7 +127,7 @@ func _make_menu():
     add_child(layer)
     menu=Control.new()
     menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    menu.mouse_filter=Control.MOUSE_FILTER_STOP
+    menu.mouse_filter=Control.MOUSE_FILTER_IGNORE
     layer.add_child(menu)
 
     home_panel=PanelContainer.new()
