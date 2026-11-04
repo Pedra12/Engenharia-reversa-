@@ -182,8 +182,9 @@ func _build_node(d:Dictionary,parent:Node3D):
             colpath=_ref(c,"m_Mesh")
         elif typ=="MeshRenderer" or typ=="SkinnedMeshRenderer":
             mats=c.get("material_resources",[])
-    if meshpath!="":
-        var mesh=load("res://assets/meshes/"+meshpath.get_file()) as Mesh
+    var renderpath=colpath if colpath!="" else meshpath
+    if renderpath!="":
+        var mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
         if mesh:
             var mi=MeshInstance3D.new()
             mi.mesh=mesh
