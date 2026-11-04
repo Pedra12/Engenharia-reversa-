@@ -92,6 +92,11 @@ def main():
             n["godot_render_obj"]=copy_mesh(meshpath or colpath,"render")
             n["godot_collider_obj"]=copy_mesh(colpath,"collider")
             n["godot_materials"]=mats
+            # Unity static-batched OBJ vertices are already in scene/world space.
+            # Preserve the original transform for colliders, but render the sliced
+            # static-batch geometry directly under the map root to avoid applying
+            # each GameObject offset a second time.
+            n["godot_static_batched"]=bool(batch and int(batch.get("sub_mesh_count") or 0)>0)
             for ch in n.get("children",[]): walk(ch)
         walk(d["root"])
         (data_dir/(mapid+".json")).write_text(json.dumps(d,ensure_ascii=False),encoding="utf-8")
@@ -407,7 +412,8 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
         if render_mesh:
             var mi=MeshInstance3D.new()
             mi.mesh=render_mesh
-            n.add_child(mi)
+            var visual_parent:Node3D=parent if bool(d.get("godot_static_batched",false)) else n
+            visual_parent.add_child(mi)
             for surface_index in range(mi.mesh.get_surface_count()):
                 if mats.size()>0:
                     var material_index=min(surface_index,mats.size()-1)
@@ -579,8 +585,15 @@ func _audit_all_maps():
                     moved=true
                     break
             move_vector=Vector2.ZERO
-        print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved)
-        if not grounded or not moved:
+        var start_position=player.global_position if is_instance_valid(player) else Vector3.ZERO
+        if is_instance_valid(player):
+            move_vector=Vector2(0,-1)
+            for frame in range(120):
+                await get_tree().physics_frame
+            move_vector=Vector2.ZERO
+        var displacement=Vector2(player.global_position.x-start_position.x,player.global_position.z-start_position.z).length() if is_instance_valid(player) else 0.0
+        print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," forward_displacement=",displacement)
+        if not grounded or not moved or displacement<0.25:
             failed=true
         _stop_walk_mode()
         await get_tree().process_frame
@@ -779,7 +792,7 @@ func _physics_process(delta):
     # snap down to its top. The old 0.42m single attempt failed on normal stairs.
     var stepped=false
     if player.is_on_floor() and horizontal_motion.length()>0.001 and player.test_move(player.global_transform,horizontal_motion):
-        for step_height in [0.35,0.55,0.78]:
+        for step_height in [0.28,0.42,0.60,0.82,1.05]:
             var up_motion=Vector3.UP*step_height
             if player.test_move(player.global_transform,up_motion):
                 continue
