@@ -105,7 +105,7 @@ jobs:
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
           export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
           export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android godot_project/build/BlockGunMapsPreview.apk
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk"
           test -s godot_project/build/BlockGunMapsPreview.apk
           ls -lh godot_project/build/BlockGunMapsPreview.apk
       - name: Upload Android preview APK
