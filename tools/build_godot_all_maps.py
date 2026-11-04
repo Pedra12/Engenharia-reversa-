@@ -436,9 +436,10 @@ func _physics_process(delta):
     var gravity=float(ProjectSettings.get_setting("physics/3d/default_gravity",9.8))
     if not player.is_on_floor():
         player.velocity.y-=gravity*delta
-    var input_dir=Vector3(move_vector.x,0.0,move_vector.y)
-    var forward=Vector3(sin(walk_yaw),0.0,cos(walk_yaw))
-    var right=Vector3(forward.z,0.0,-forward.x)
+    # Screen drag upward is negative Y; camera forward in Godot is local -Z.
+    var input_dir=Vector3(move_vector.x,0.0,-move_vector.y)
+    var forward=Vector3(-sin(walk_yaw),0.0,-cos(walk_yaw))
+    var right=Vector3(cos(walk_yaw),0.0,-sin(walk_yaw))
     var direction=(right*input_dir.x+forward*input_dir.z).normalized()
     player.velocity.x=direction.x*5.0
     player.velocity.z=direction.z*5.0
