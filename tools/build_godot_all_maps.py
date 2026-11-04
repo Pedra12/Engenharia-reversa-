@@ -384,46 +384,60 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     n.scale=_v(d.get("scale",{}),Vector3.ONE)
     var q=d.get("rotation",{})
     n.quaternion=Quaternion(float(q.get("x",0)),float(q.get("y",0)),float(q.get("z",0)),float(q.get("w",1))).normalized()
-    var meshpath=""
-    var colpath=""
-    var mats=[]
-    for c in d.get("components",[]):
-        var typ=String(c.get("type",""))
-        if typ=="MeshFilter" or typ=="SkinnedMeshRenderer":
-            meshpath=_ref(c,"m_Mesh")
-        elif typ=="MeshCollider":
-            colpath=_ref(c,"m_Mesh")
-        elif typ=="MeshRenderer" or typ=="SkinnedMeshRenderer":
-            mats=c.get("material_resources",[])
-    # House map has one anomalous collider mesh with bounds hundreds of Unity units
-    # across. It is not the visible house shell and makes the map appear clipped.
-    # Keep its renderer mesh for display; retain collider mesh only for physics below.
-    var renderpath=colpath if colpath!="" else meshpath
-    if map_id=="lvl_house" and String(d.get("name",""))=="sm_house_o1":
-        renderpath=meshpath
+    var renderpath=String(d.get("godot_render_obj",""))
+    var colpath=String(d.get("godot_collider_obj",""))
+    var mats=d.get("godot_materials",[])
+    if renderpath=="":
+        renderpath=_ref_by_type(d.get("components",[]),"MeshFilter","m_Mesh")
+    if renderpath=="":
+        renderpath=colpath
+    var render_mesh:Mesh=null
     if renderpath!="":
-        var mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
-        if mesh:
+        render_mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
+        if render_mesh:
             var mi=MeshInstance3D.new()
-            mi.mesh=mesh
-            mi.material_override=_mat(mats)
+            mi.mesh=render_mesh
             n.add_child(mi)
-    # Physics fallback: many recovered Unity render meshes have no MeshCollider
-    # component in the extracted scene graph. Use their static triangle surface so
-    # the player cannot fall through floors, dunes, ramps or building platforms.
+            for surface_index in range(mi.mesh.get_surface_count()):
+                if mats.size()>0:
+                    var material_index=min(surface_index,mats.size()-1)
+                    var surface_material=_mat([mats[material_index]],String(d.get("name","")))
+                    if surface_material:
+                        mi.set_surface_override_material(surface_index,surface_material)
+    # Only use recovered Unity MeshCollider data, not every visible render mesh.
+    # Treating trees, water, roofs and static-batched scenery as solid walls was
+    # the main source of blocked movement and impossible house entrances.
     var collision_mesh:Mesh=null
     if colpath!="":
         collision_mesh=load("res://assets/meshes/"+colpath.get_file()) as Mesh
-    if collision_mesh==null and renderpath!="":
-        collision_mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
+    var object_name=String(d.get("name","")).to_lower()
+    if collision_mesh==null and render_mesh and colpath=="":
+        var excluded=["background","alpha","water","foliage","tree"]
+        var forbidden=false
+        for token in excluded:
+            if object_name.contains(token): forbidden=true
+        var bounds=render_mesh.get_aabb().size
+        var horizontal=maxf(bounds.x,bounds.z)
+        if not forbidden and horizontal>8.0 and bounds.y< horizontal*0.16:
+            collision_mesh=render_mesh
     if collision_mesh:
         var body=StaticBody3D.new()
-        body.name="RecoveredSurfaceCollision"
+        body.name="RecoveredUnityCollider"
         body.collision_layer=1
         body.collision_mask=1
         var cs=CollisionShape3D.new()
-        cs.name="TriangleSurface"
+        cs.name="RecoveredTriangleCollision"
         cs.shape=collision_mesh.create_trimesh_shape()
+        # Some shared-asset collider meshes are exported in centimeters while
+        # their scene render meshes are already in meters. Normalize per axis.
+        if render_mesh:
+            var visual_size=render_mesh.get_aabb().size
+            var collider_size=collision_mesh.get_aabb().size
+            var correction=Vector3.ONE
+            for axis in range(3):
+                if visual_size[axis]>0.02 and collider_size[axis]>visual_size[axis]*4.0:
+                    correction[axis]=visual_size[axis]/collider_size[axis]
+            cs.scale=correction
         body.add_child(cs)
         n.add_child(body)
     for ch in d.get("children",[]):
@@ -433,22 +447,40 @@ func _ref(c:Dictionary,key:String)->String:
         if String(r.get("field",""))==key:
             return String(r.get("exported_obj",""))
     return ""
+func _ref_by_type(components:Array,component_type:String,key:String)->String:
+    for component in components:
+        if String(component.get("type",""))==component_type:
+            var path=_ref(component,key)
+            if path!="": return path
+    return ""
 func _v(x:Variant,fb:Vector3)->Vector3:
     if x is Dictionary:
         return Vector3(float(x.get("x",fb.x)),float(x.get("y",fb.y)),float(x.get("z",fb.z)))
     return fb
-func _mat(ms:Array):
-    for m in ms:
-        for t in m.get("textures",[]):
-            var p=String(t.get("exported_png",""))
-            if p!="":
-                var tx=load("res://assets/textures/"+p.get_file()) as Texture2D
-                if tx:
-                    var sm=StandardMaterial3D.new()
-                    sm.albedo_texture=tx
-                    sm.roughness=.9
-                    return sm
-    return null
+func _mat(ms:Array,object_name:String="")->StandardMaterial3D:
+    if ms.is_empty(): return null
+    var m=ms[0]
+    var material_name=String(m.get("name","")).to_lower()
+    var object_lower=object_name.to_lower()
+    var sm=StandardMaterial3D.new()
+    sm.roughness=0.88
+    for t in m.get("textures",[]):
+        var p=String(t.get("exported_png",""))
+        if p!="":
+            var tx=load("res://assets/textures/"+p.get_file()) as Texture2D
+            if tx:
+                sm.albedo_texture=tx
+                break
+    if material_name.contains("alpha") or object_lower.contains("alpha"):
+        sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+        sm.alpha_scissor_threshold=0.42
+        sm.cull_mode=BaseMaterial3D.CULL_DISABLED
+    if material_name.contains("water") or object_lower.contains("water"):
+        sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+        sm.albedo_color=Color(0.28,0.58,0.72,0.58)
+        sm.roughness=0.16
+        sm.cull_mode=BaseMaterial3D.CULL_DISABLED
+    return sm
 func _create_camera():
     camera_pivot=Node3D.new()
     camera_pivot.name="ExplorerCameraPivot"
@@ -562,8 +594,8 @@ func _start_walk_mode():
     collision.position.y=0.9
     player.add_child(collision)
     player.motion_mode=CharacterBody3D.MOTION_MODE_GROUNDED
-    player.floor_snap_length=0.42
-    player.floor_max_angle=deg_to_rad(52.0)
+    player.floor_snap_length=0.72
+    player.floor_max_angle=deg_to_rad(55.0)
     player.safe_margin=0.025
     player.max_slides=8
     walk_camera=Camera3D.new()
@@ -571,7 +603,18 @@ func _start_walk_mode():
     walk_camera.fov=75.0
     player.add_child(walk_camera)
     walk_camera.current=true
-    player.global_position=camera_pivot.global_position+Vector3(0,maxf(5.0,camera_distance*0.04),0)
+    player.global_position=camera_pivot.global_position+Vector3.UP*20.0
+    await get_tree().physics_frame
+    if is_instance_valid(player):
+        var ray_origin=camera_pivot.global_position+Vector3.UP*250.0
+        var ray_query=PhysicsRayQueryParameters3D.create(ray_origin,ray_origin-Vector3.UP*600.0)
+        ray_query.collision_mask=1
+        ray_query.exclude=[player.get_rid()]
+        var floor_hit=get_world_3d().direct_space_state.intersect_ray(ray_query)
+        if not floor_hit.is_empty():
+            player.global_position=floor_hit.position+Vector3.UP*0.08
+        else:
+            player.global_position=camera_pivot.global_position+Vector3.UP*8.0
     walk_yaw=camera_pivot.rotation.y
     walk_pitch=deg_to_rad(-8.0)
     move_vector=Vector2.ZERO
@@ -647,21 +690,31 @@ func _physics_process(delta):
     player.velocity.x=direction.x*4.5
     player.velocity.z=direction.z*4.5
     var horizontal_motion=Vector3(player.velocity.x,0.0,player.velocity.z)*delta
-    # Step assist: lift over stair risers, move forward, then snap down onto
-    # the next tread. This keeps ordinary walls solid and avoids jump-spamming.
+    # Step climbing: test several safe lift heights, move onto the tread, then
+    # snap down to its top. The old 0.42m single attempt failed on normal stairs.
+    var stepped=false
     if player.is_on_floor() and horizontal_motion.length()>0.001 and player.test_move(player.global_transform,horizontal_motion):
-        var raised=player.global_transform
-        raised.origin+=Vector3.UP*0.42
-        if not player.test_move(raised,horizontal_motion):
+        for step_height in [0.35,0.55,0.78]:
+            var up_motion=Vector3.UP*step_height
+            if player.test_move(player.global_transform,up_motion):
+                continue
+            var raised=player.global_transform
+            raised.origin+=up_motion
+            if player.test_move(raised,horizontal_motion):
+                continue
             var step_forward=raised
             step_forward.origin+=horizontal_motion
             var landing=KinematicCollision3D.new()
-            if player.test_move(step_forward,Vector3.DOWN*0.56,landing):
-                if landing.get_normal().dot(Vector3.UP)>0.65:
+            if player.test_move(step_forward,Vector3.DOWN*(step_height+0.22),landing):
+                if landing.get_normal().dot(Vector3.UP)>0.68:
                     var landed=step_forward
                     landed.origin+=landing.get_travel()
                     player.global_transform=landed
-                    player.velocity.y=minf(player.velocity.y,0.0)
+                    player.velocity.x=0.0
+                    player.velocity.z=0.0
+                    player.velocity.y=0.0
+                    stepped=true
+                    break
     player.move_and_slide()
 func _pan(delta:Vector2):
     if not camera_pivot or not camera:
