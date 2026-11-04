@@ -83,6 +83,12 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -o /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          if [ -d "$HOME/.local/share/godot/export_templates/4.4.1.stable/templates" ]; then
+            cp -a "$HOME/.local/share/godot/export_templates/4.4.1.stable/templates/." "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+            rm -rf "$HOME/.local/share/godot/export_templates/4.4.1.stable/templates"
+          fi
+          test -s "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk"
+          test -s "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_release.apk"
           mkdir -p "$HOME/.config/godot"
           cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
