@@ -895,8 +895,12 @@ func _physics_process(delta):
                 continue
             var target=raised
             target.origin+=horizontal_motion
-            var ray_start=target.origin+Vector3.UP*0.22
-            var ray_end=player.global_position+horizontal_motion-Vector3.UP*0.18
+            # Probe ahead by one tread depth. At a riser, the capsule center is
+            # still over the previous tread, so a short ray only sees the old floor.
+            var probe_offset=horizontal_motion.normalized()*0.38
+            var probe_origin=target.origin+probe_offset
+            var ray_start=probe_origin+Vector3.UP*0.22
+            var ray_end=probe_origin-Vector3.UP*(step_height+0.25)
             var query=PhysicsRayQueryParameters3D.create(ray_start,ray_end)
             query.collision_mask=1
             query.exclude=[player.get_rid()]
