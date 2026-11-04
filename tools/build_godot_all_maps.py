@@ -562,6 +562,12 @@ func _audit_all_maps():
         var expected_meshes=maxi(0,int(manifest.get("node_count",1))-1) if manifest is Dictionary else 0
         var node_count=world.get_child_count() if is_instance_valid(world) else 0
         print("MAP_AUDIT id=",MAPS[index]," meshes=",mesh_count," expected_meshes=",expected_meshes," colliders=",collider_count," root_children=",node_count)
+        if MAPS[index]=="lvl_assault" and is_instance_valid(world):
+            var diagnostic_count=0
+            for collider_node in world.find_children("*","StaticBody3D",true,false):
+                if diagnostic_count>=12: break
+                print("ASSAULT_COLLIDER_DIAGNOSTIC name=",collider_node.name," position=",collider_node.global_position," scale=",collider_node.global_transform.basis.get_scale()," shapes=",collider_node.get_child_count())
+                diagnostic_count+=1
         if mesh_count<expected_meshes or collider_count==0:
             failed=true
         await _start_walk_mode()
@@ -581,10 +587,18 @@ func _audit_all_maps():
                 move_vector=direction
                 for frame in range(60):
                     await get_tree().physics_frame
-                var travelled=Vector2(player.global_position.x-test_origin.x,player.global_position.z-test_origin.z).length()
+                var end_position=player.global_position
+                var travelled=Vector2(end_position.x-test_origin.x,end_position.z-test_origin.z).length()
                 max_displacement=maxf(max_displacement,travelled)
                 if travelled>0.50:
                     moved=true
+                if MAPS[index]=="lvl_assault":
+                    var collision_name="none"
+                    if player.get_slide_collision_count()>0:
+                        var slide=player.get_slide_collision(0)
+                        if slide.get_collider():
+                            collision_name=String(slide.get_collider().name)
+                    print("ASSAULT_DIRECTION_TEST direction=",direction," start=",test_origin," end=",end_position," velocity=",player.velocity," collisions=",player.get_slide_collision_count()," collider=",collision_name," travelled=",travelled)
             move_vector=Vector2.ZERO
         print("MAP_WALK_AUDIT id=",MAPS[index]," grounded=",grounded," moved=",moved," max_cardinal_displacement=",max_displacement)
         if not grounded or not moved or max_displacement<0.50:
