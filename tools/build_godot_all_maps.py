@@ -182,7 +182,12 @@ func _build_node(d:Dictionary,parent:Node3D):
             colpath=_ref(c,"m_Mesh")
         elif typ=="MeshRenderer" or typ=="SkinnedMeshRenderer":
             mats=c.get("material_resources",[])
+    # House map has one anomalous collider mesh with bounds hundreds of Unity units
+    # across. It is not the visible house shell and makes the map appear clipped.
+    # Keep its renderer mesh for display; retain collider mesh only for physics below.
     var renderpath=colpath if colpath!="" else meshpath
+    if id=="lvl_house" and String(d.get("name",""))=="sm_house_o1":
+        renderpath=meshpath
     if renderpath!="":
         var mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
         if mesh:
@@ -248,6 +253,8 @@ func _fit_camera():
         camera_pivot.global_position=world.global_position
         camera_distance=80.0
     else:
+        # For the recovered house, the physics collider for sm_house_o1 is
+        # intentionally excluded from rendering above; fit to visible geometry.
         camera_pivot.global_position=bounds.get_center()
         var diagonal=maxf(bounds.size.length(),4.0)
         var half_fov=deg_to_rad(camera.fov*0.5)
