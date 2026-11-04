@@ -634,14 +634,27 @@ func _audit_all_maps():
                 var start_point=Vector3(float(start_data[0]),float(start_data[1]),float(start_data[2]))
                 var end_point=Vector3(float(end_data[0]),float(end_data[1]),float(end_data[2]))
                 var space=get_world_3d().direct_space_state
-                var start_query=PhysicsRayQueryParameters3D.create(start_point+Vector3.UP*1.0,start_point-Vector3.UP*1.0)
-                start_query.collision_mask=1
-                start_query.exclude=[player.get_rid()]
-                var end_query=PhysicsRayQueryParameters3D.create(end_point+Vector3.UP*1.0,end_point-Vector3.UP*1.0)
-                end_query.collision_mask=1
-                end_query.exclude=[player.get_rid()]
-                var start_hit=space.intersect_ray(start_query)
-                var end_hit=space.intersect_ray(end_query)
+                var start_hit:Dictionary={}
+                var end_hit:Dictionary={}
+                var sample_offsets=[Vector2.ZERO,Vector2(0.15,0),Vector2(-0.15,0),Vector2(0,0.15),Vector2(0,-0.15),Vector2(0.30,0),Vector2(-0.30,0),Vector2(0,0.30),Vector2(0,-0.30),Vector2(0.15,0.15),Vector2(-0.15,0.15),Vector2(0.15,-0.15),Vector2(-0.15,-0.15)]
+                for offset in sample_offsets:
+                    var sample_start=start_point+Vector3(offset.x,0.0,offset.y)
+                    var start_query=PhysicsRayQueryParameters3D.create(sample_start+Vector3.UP*2.5,sample_start-Vector3.UP*2.5)
+                    start_query.collision_mask=1
+                    start_query.exclude=[player.get_rid()]
+                    var candidate_start=space.intersect_ray(start_query)
+                    if not candidate_start.is_empty() and candidate_start.get("collider")==stair_body and candidate_start.normal.y>0.65:
+                        start_hit=candidate_start
+                        break
+                for offset in sample_offsets:
+                    var sample_end=end_point+Vector3(offset.x,0.0,offset.y)
+                    var end_query=PhysicsRayQueryParameters3D.create(sample_end+Vector3.UP*2.5,sample_end-Vector3.UP*2.5)
+                    end_query.collision_mask=1
+                    end_query.exclude=[player.get_rid()]
+                    var candidate_end=space.intersect_ray(end_query)
+                    if not candidate_end.is_empty() and candidate_end.get("collider")==stair_body and candidate_end.normal.y>0.65:
+                        end_hit=candidate_end
+                        break
                 if not start_hit.is_empty() and not end_hit.is_empty() and start_hit.get("collider")==stair_body and end_hit.get("collider")==stair_body:
                     player.global_position=start_hit.position+Vector3.UP*0.08
                     player.velocity=Vector3.ZERO
