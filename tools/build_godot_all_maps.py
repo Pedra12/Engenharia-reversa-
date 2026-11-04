@@ -835,31 +835,44 @@ func _physics_process(delta):
     player.velocity.x=direction.x*4.5
     player.velocity.z=direction.z*4.5
     var horizontal_motion=Vector3(player.velocity.x,0.0,player.velocity.z)*delta
-    # Step climbing: test several safe lift heights, move onto the tread, then
-    # snap down to its top. The old 0.42m single attempt failed on normal stairs.
+    # Assisted stair traversal: when the capsule hits a riser, test safe lifts
+    # and raycast the tread at the destination. This avoids requiring jump input.
     var stepped=false
     if player.is_on_floor() and horizontal_motion.length()>0.001 and player.test_move(player.global_transform,horizontal_motion):
-        for step_height in [0.28,0.42,0.60,0.82,1.05]:
-            var up_motion=Vector3.UP*step_height
-            if player.test_move(player.global_transform,up_motion):
-                continue
+        var space=get_world_3d().direct_space_state
+        for step_height in [0.18,0.26,0.34,0.44,0.56,0.70,0.85]:
             var raised=player.global_transform
-            raised.origin+=up_motion
+            raised.origin+=Vector3.UP*step_height
+            if player.test_move(player.global_transform,Vector3.UP*step_height):
+                continue
             if player.test_move(raised,horizontal_motion):
                 continue
-            var step_forward=raised
-            step_forward.origin+=horizontal_motion
-            var landing=KinematicCollision3D.new()
-            if player.test_move(step_forward,Vector3.DOWN*(step_height+0.22),landing):
-                if landing.get_normal().dot(Vector3.UP)>0.68:
-                    var landed=step_forward
-                    landed.origin+=landing.get_travel()
-                    player.global_transform=landed
-                    player.velocity.x=0.0
-                    player.velocity.z=0.0
-                    player.velocity.y=0.0
-                    stepped=true
-                    break
+            var target=raised
+            target.origin+=horizontal_motion
+            var ray_start=target.origin+Vector3.UP*0.22
+            var ray_end=player.global_position+horizontal_motion-Vector3.UP*0.18
+            var query=PhysicsRayQueryParameters3D.create(ray_start,ray_end)
+            query.collision_mask=1
+            query.exclude=[player.get_rid()]
+            var hit=space.intersect_ray(query)
+            if hit.is_empty() or hit.normal.dot(Vector3.UP)<0.68:
+                continue
+            var rise=hit.position.y-player.global_position.y
+            if rise<0.03 or rise>step_height+0.18:
+                continue
+            var landing=target
+            landing.origin.y=hit.position.y+0.06
+            var overlap=PhysicsShapeQueryParameters3D.new()
+            overlap.shape=player.get_child(0).shape
+            overlap.transform=landing*player.get_child(0).transform
+            overlap.collision_mask=1
+            overlap.exclude=[player.get_rid()]
+            if not space.intersect_shape(overlap,4).is_empty():
+                continue
+            player.global_transform=landing
+            player.velocity=Vector3.ZERO
+            stepped=true
+            break
     player.move_and_slide()
 func _pan(delta:Vector2):
     if not camera_pivot or not camera:
