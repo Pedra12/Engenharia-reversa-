@@ -236,7 +236,7 @@ func _fit_camera():
     for item in world.find_children("*","MeshInstance3D",true,false):
         var mi=item as MeshInstance3D
         if mi and mi.mesh:
-            var transformed=mi.global_transform * mi.get_aabb()
+            var transformed=mi.get_aabb() * mi.global_transform
             if not found:
                 bounds=transformed
                 found=true
@@ -254,9 +254,6 @@ func _fit_camera():
             camera_distance=80.0
     camera_pivot.rotation=Vector3(deg_to_rad(-32.0),deg_to_rad(35.0),0)
     camera.position=Vector3(0,0,camera_distance)
-    camera.look_at(camera_pivot.global_position,Vector3.UP)
-    camera.position=Vector3(0,0,camera_distance)
-    camera_pivot.rotation=Vector3(deg_to_rad(-32.0),deg_to_rad(35.0),0)
     print("CAMERA_FIT distance=",camera_distance," bounds_found=",found)
 func _count_meshes(root:Node)->int:
     var total=0
