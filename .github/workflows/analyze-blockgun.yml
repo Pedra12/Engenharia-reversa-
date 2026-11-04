@@ -70,6 +70,24 @@ jobs:
           grep -q "BLOCKGUN_BOOT_OK" /tmp/godot-runtime.log
           grep -q "MAP_LOADED lvl_forest" /tmp/godot-runtime.log
           echo "Startup and default map load verified."
+          set +e
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project -- --audit-all-maps 2>&1 | tee /tmp/map-audit.log
+          MAP_AUDIT_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$MAP_AUDIT_STATUS" -ne 0 ]; then
+            echo "One or more recovered maps failed the scene/collision audit."
+            exit "$MAP_AUDIT_STATUS"
+          fi
+          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script" /tmp/map-audit.log; then
+            echo "Godot script errors detected during map audit."
+            exit 1
+          fi
+          grep -q "BLOCKGUN_ALL_MAPS_AUDIT_OK count=9" /tmp/map-audit.log
+          if grep -q "No project icon specified" /tmp/godot-runtime.log; then
+            echo "Android project icon is still missing."
+            exit 1
+          fi
+          echo "All nine maps and their collision resources passed automated audit."
       - name: Install Java and Android SDK
         uses: actions/setup-java@v4
         with:
