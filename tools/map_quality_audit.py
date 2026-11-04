@@ -111,30 +111,18 @@ def stair_route_candidates(mesh_path,scale,position,node_name):
   for xz in _cluster_xz(points):
    nodes.append((y,xz))
  if len(nodes)<3: return []
- best=[]
- for i,(y,xz) in enumerate(nodes):
-  paths=[i]
-  for j in range(i+1,len(nodes)):
-   y2,xz2=nodes[j]; dy=y2-y
-   if dy<0.07 or dy>0.32: continue
-   if (xz2[0]-xz[0])**2+(xz2[1]-xz[1])**2>1.6**2: continue
-   if len(paths)+1>len(best): best=paths+[j]
-   paths=paths+[j] if len(paths)+1>1 else paths
- # Dynamic longest path, allowing several branches at each tread level.
- best_path=[]
- def extend(path):
-  nonlocal best_path
-  if len(path)>len(best_path): best_path=path[:]
-  yi,xi=nodes[path[-1]]
-  for j in range(path[-1]+1,len(nodes)):
-   yj,xj=nodes[j]; dy=yj-yi
+ best_paths=[[i] for i in range(len(nodes))]
+ for j,(yj,xj) in enumerate(nodes):
+  for i in range(j):
+   yi,xi=nodes[i]; dy=yj-yi
    if dy<0.07 or dy>0.32: continue
    if (xj[0]-xi[0])**2+(xj[1]-xi[1])**2>1.6**2: continue
-   extend(path+[j])
- for i in range(len(nodes)): extend([i])
+   if len(best_paths[i])+1>len(best_paths[j]):
+    best_paths[j]=best_paths[i]+[j]
+ best_path=max(best_paths,key=len)
  if len(best_path)<3: return []
  y0,(x0,z0)=nodes[best_path[0]]; y1,(x1,z1)=nodes[best_path[-1]]
- # UnityPy's local collider mesh is aligned to the static-batch render mesh
+ # UnityPy's local collider mesh aligns with the static-batch render mesh
  # after reflecting the GameObject's X translation into Godot coordinates.
  start=[x0-px,y0+py,z0+pz]; end=[x1-px,y1+py,z1+pz]
  distance=((end[0]-start[0])**2+(end[2]-start[2])**2)**0.5
