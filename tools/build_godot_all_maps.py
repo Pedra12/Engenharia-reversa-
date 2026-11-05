@@ -675,7 +675,7 @@ func _audit_all_maps():
             walk_yaw=saved_stair_yaw
             var climb_height=player.global_position.y-stair_start_y
             var passed=climb_height>=minf(0.25,float(route.get("rise",0.5))*0.45) and player.is_on_floor()
-            print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," grounded=",player.is_on_floor()," start=",stair_start_y," hit=",stair_hit.position," route_delta=",route_delta," end=",player.global_position," climb_height=",climb_height," expected_rise=",route.get("rise",0.0)," passed=",passed)
+            print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," grounded=",player.is_on_floor()," start=",stair_start_y," hit=",stair_hit.position," probe_offset=",probe_used," route_delta=",route_delta," end=",player.global_position," climb_height=",climb_height," expected_rise=",route.get("rise",0.0)," passed=",passed)
             if passed:
                 passed_stairs+=1
         print("STAIR_MAP_AUDIT map=",MAPS[index]," tested=",tested_stairs," passed=",passed_stairs)
