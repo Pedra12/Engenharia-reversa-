@@ -70,7 +70,10 @@ def main():
     atlas_path=ROOT/"exported_textures"/"sharedassets1.assets__65__t_atlas_environment.png"
     if atlas_path.exists():
         atlas=Image.open(atlas_path).convert("RGBA")
-        water_tile=atlas.crop((43,582,289,828)).resize((512,512),Image.Resampling.LANCZOS)
+        # The source atlas is 2048x2048. Crop the actual blue water tile,
+        # not the brown empty atlas margin (the old coordinates were scaled
+        # for a 1280px preview and produced a solid brown texture).
+        water_tile=atlas.crop((72,956,474,1358)).resize((512,512),Image.Resampling.LANCZOS)
         water_tile.save(textures/"deluxe_pool_water.png")
     else:
         print("DELUXE_POOL_WATER_TEXTURE_MISSING")
@@ -449,6 +452,13 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     n.name=String(d.get("name","Recovered")).replace("/","_")
     parent.add_child(n)
     n.position=_v(d.get("position",{}),Vector3.ZERO)
+    # Unity's static-batched meshes are exported in world space with X already
+    # reflected for Godot. Non-static meshes still use their original local
+    # transforms, so mirror only their X origin in Rome and Forest. These
+    # map-scoped corrections align their buildings/ground with the static
+    # geometry without touching any other map.
+    if (map_id=="lvl_rome" or map_id=="lvl_forest") and not bool(d.get("godot_static_batched",false)):
+        n.position.x=-n.position.x
     n.scale=_v(d.get("scale",{}),Vector3.ONE)
     var q=d.get("rotation",{})
     n.quaternion=Quaternion(float(q.get("x",0)),float(q.get("y",0)),float(q.get("z",0)),float(q.get("w",1))).normalized()
@@ -486,12 +496,9 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     elif colpath!="":
         collision_mesh=load("res://assets/meshes/"+colpath.get_file()) as Mesh
     var object_name=String(d.get("name","")).to_lower()
-    # These two maps contain large, horizontal walkable background/ground meshes
-    # without Unity MeshCollider components. Enable collision ONLY for these
-    # explicitly audited map nodes; leave every other map and node unchanged.
-    if render_mesh and colpath=="" and ((map_id=="lvl_rome" and object_name=="umsh_rome_s5_background") or (map_id=="lvl_forest" and object_name=="sm_forest_s4_background")):
-        collision_mesh=render_mesh
-        print("MAP_SPECIFIC_GROUND_COLLIDER map=",map_id," node=",n.name," source=original_render_mesh")
+    # Keep decorative background meshes visual-only. The playable ground in
+    # Rome and Forest comes from the original Unity collider meshes; do not turn
+    # giant backdrop geometry into an artificial floor.
     if collision_mesh==null and render_mesh and colpath=="":
         var excluded=["background","alpha","water","foliage","tree","roof"]
         var forbidden=false
@@ -594,9 +601,11 @@ func _add_deluxe_pool_water():
         return
     var material=StandardMaterial3D.new()
     material.albedo_texture=water_texture
-    material.albedo_color=Color(0.82,0.94,1.0,0.68)
-    material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
-    material.roughness=0.18
+    # Use the recovered blue water atlas tile at full opacity. The previous
+    # alpha blend mixed the pool floor into the water and made it look green.
+    material.albedo_color=Color(1.0,1.0,1.0,1.0)
+    material.transparency=BaseMaterial3D.TRANSPARENCY_DISABLED
+    material.roughness=0.24
     material.cull_mode=BaseMaterial3D.CULL_DISABLED
     material.uv1_scale=Vector3(3.0,3.0,1.0)
     material.render_priority=1
@@ -913,6 +922,12 @@ func _start_walk_mode():
     await get_tree().physics_frame
     if is_instance_valid(player):
         var candidate_points=[camera_pivot.global_position]
+        var spawn_reference=camera_pivot.global_position
+        # Forest's train crosses the map center. Prefer a known open ground
+        # patch away from the train when selecting the initial exploration spawn.
+        if world.name=="Map_lvl_forest":
+            spawn_reference=Vector3(40.0,-10.0,40.0)
+            candidate_points.append(spawn_reference)
         # Probe from actual collider origins too. A map's visual bounding-box
         # center can be over a gap or background mesh rather than its playable floor.
         for collider_node in world.find_children("*","CollisionShape3D",true,false):
@@ -936,6 +951,10 @@ func _start_walk_mode():
                 var floor_hit=get_world_3d().direct_space_state.intersect_ray(ray_query)
                 if floor_hit.is_empty() or floor_hit.normal.y<=0.58:
                     continue
+                # The train remains part of the Forest scenery, but it must
+                # never be selected as the player's initial ground spawn.
+                if world.name=="Map_lvl_forest" and floor_hit.collider and String(floor_hit.collider.name)=="RecoveredUnityCollider_sm_forest_s3":
+                    continue
                 var candidate_transform=player.global_transform
                 candidate_transform.origin=floor_hit.position+Vector3.UP*0.06
                 # test_move alone does not reject a body that already starts
@@ -952,7 +971,7 @@ func _start_walk_mode():
                 for direction in test_directions:
                     if not player.test_move(candidate_transform,direction*4.5):
                         clear_directions+=1
-                var distance=Vector2(floor_hit.position.x-camera_pivot.global_position.x,floor_hit.position.z-camera_pivot.global_position.z).length()
+                var distance=Vector2(floor_hit.position.x-spawn_reference.x,floor_hit.position.z-spawn_reference.z).length()
                 if clear_directions>best_clearance or (clear_directions==best_clearance and distance<best_distance):
                     best_clearance=clear_directions
                     best_distance=distance
