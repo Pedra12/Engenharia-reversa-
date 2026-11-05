@@ -638,14 +638,27 @@ func _audit_all_maps():
             var route_delta=end_xz-start_xz
             if route_delta.length()<0.20:
                 continue
-            var stair_query=PhysicsRayQueryParameters3D.create(start_xz+Vector3.UP*30.0,start_xz-Vector3.UP*30.0)
-            stair_query.collision_mask=1
-            stair_query.hit_back_faces=true
-            stair_query.exclude=[player.get_rid()]
-            var stair_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
+            var stair_hit={}
+            var probe_used=Vector2.ZERO
+            var best_probe_distance=INF
+            for ix in range(-4,5):
+                for iz in range(-4,5):
+                    var offset=Vector2(float(ix)*0.25,float(iz)*0.25)
+                    if offset.length()>1.01:
+                        continue
+                    var probe=start_xz+Vector3(offset.x,0.0,offset.y)
+                    var stair_query=PhysicsRayQueryParameters3D.create(probe+Vector3.UP*30.0,probe-Vector3.UP*30.0)
+                    stair_query.collision_mask=1
+                    stair_query.hit_back_faces=true
+                    stair_query.exclude=[player.get_rid()]
+                    var candidate_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
+                    if not candidate_hit.is_empty() and abs(candidate_hit.normal.dot(Vector3.UP))>0.70 and offset.length()<best_probe_distance:
+                        stair_hit=candidate_hit
+                        probe_used=offset
+                        best_probe_distance=offset.length()
             tested_stairs+=1
-            if stair_hit.is_empty() or abs(stair_hit.normal.dot(Vector3.UP))<0.70:
-                print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," hit=false")
+            if stair_hit.is_empty():
+                print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," hit=false predicted_start=",start_xz," predicted_end=",end_xz)
                 continue
             player.global_position=stair_hit.position+Vector3.UP*0.10
             player.velocity=Vector3.ZERO
