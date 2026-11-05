@@ -10,6 +10,7 @@ on:
       - "tools/unity_scene_graph.py"
       - "tools/build_godot_preview.py"
       - "tools/build_godot_all_maps.py"
+      - "tools/patch_godot_materials.py"
       - "tools/map_quality_audit.py"
   pull_request:
     branches: [main]
@@ -20,6 +21,7 @@ on:
       - "tools/unity_scene_graph.py"
       - "tools/build_godot_preview.py"
       - "tools/build_godot_all_maps.py"
+      - "tools/patch_godot_materials.py"
       - "tools/map_quality_audit.py"
   workflow_dispatch:
 
@@ -79,6 +81,8 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check Pillow
       - name: Generate Godot project with all recovered maps
         run: python3 tools/build_godot_all_maps.py
+      - name: Preserve imported materials and apply exact recovered texture overrides
+        run: python3 tools/patch_godot_materials.py
       - name: Audit every map assets, interiors and stair candidates
         run: python3 tools/map_quality_audit.py
       - name: Preserve map audit data even if validation fails
