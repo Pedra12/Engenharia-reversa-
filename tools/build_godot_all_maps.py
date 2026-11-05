@@ -312,6 +312,10 @@ def main():
                 result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count)
                 n["godot_render_obj"]=glb_name
                 n["godot_lightmap_vertex_colors"]=True
+                # GLB primitives are sliced from the original Unity static-batch
+                # submesh range. Preserve the original material-array offset so
+                # each surface receives its matching Unity material, not mats[0].
+                n["godot_material_start_index"]=first if count>0 else 0
                 all_meshes.add(glb_name); copied.add(glb_name)
                 india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,**result})
             n["godot_materials"]=mats
@@ -669,7 +673,8 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             visual_parent.add_child(mi)
             for surface_index in range(mi.mesh.get_surface_count()):
                 if mats.size()>0:
-                    var material_index=min(surface_index,mats.size()-1)
+                    var material_start=int(d.get("godot_material_start_index",0))
+                    var material_index=min(material_start+surface_index,mats.size()-1)
                     var surface_material=_mat([mats[material_index]],String(d.get("name","")))
                     if surface_material:
                         if bool(d.get("godot_lightmap_vertex_colors",false)) and surface_material is StandardMaterial3D:
