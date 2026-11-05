@@ -680,7 +680,8 @@ func _audit_all_maps():
                     if offset.length()>1.01:
                         continue
                     var probe=start_xz+Vector3(offset.x,0.0,offset.y)
-                    var stair_query=PhysicsRayQueryParameters3D.create(probe+Vector3.UP*30.0,probe-Vector3.UP*30.0)
+                    var probe_y=float(route_start[1])
+                    var stair_query=PhysicsRayQueryParameters3D.create(Vector3(probe.x,probe_y+2.5,probe.z),Vector3(probe.x,probe_y-2.5,probe.z))
                     stair_query.collision_mask=1
                     stair_query.hit_back_faces=true
                     stair_query.exclude=[player.get_rid()]
