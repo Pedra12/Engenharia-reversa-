@@ -4,7 +4,9 @@ import json,csv,pathlib,re,collections
 ROOT=pathlib.Path("scene_graph/maps"); GRAPH=pathlib.Path("scene_graph"); OUT=pathlib.Path("inventory_out")
 OUT.mkdir(exist_ok=True)
 PAT={"stairs":re.compile(r"stair|stairs|step|escad|degrau|ladder",re.I),
-     "interior":re.compile(r"interior|inside|room|house|building|floor|hall|corridor|door|window|office|kitchen|bed|wall|roof|basement|loft",re.I)}
+     # Only explicit room/interior-space terms. Generic building parts such as
+     # house, wall, floor and roof are not evidence of an explorable interior.
+     "interior":re.compile(r"interior|inside|room|hall|corridor|stairwell|office|kitchen|bedroom|basement|loft",re.I)}
 def obj_stats(path):
  p=GRAPH/path
  if not p.exists(): return {"missing":True,"vertices":0,"faces":0}
