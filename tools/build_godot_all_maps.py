@@ -80,8 +80,12 @@ def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path
                         atlas_path:pathlib.Path,output_path:pathlib.Path,
                         first_sub_mesh:int=0,sub_mesh_count:int=0):
     """Bake one Unity renderer's original lightmap into its own India atlas copy."""
-    import numpy as np
-    from numba import njit
+    try:
+        import numpy as np
+    except ImportError:
+        import subprocess, sys
+        subprocess.check_call([sys.executable,"-m","pip","install","--disable-pip-version-check","numpy"])
+        import numpy as np
 
     uv_data=json.loads(uv_path.read_text(encoding="utf-8"))
     uv0=np.asarray(uv_data.get("m_UV0",[]),dtype=np.float32)
@@ -123,50 +127,52 @@ def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path
     if len(faces)==0 or int(faces.max())>=len(uv0):
         raise ValueError(f"No valid India lightmap triangles: {obj_path.name}")
 
-    width,height=Image.open(atlas_path).size
-    if Image.open(lightmap_path).size!=(width,height):
-        raise ValueError("India atlas and lightmap dimensions differ")
-    @njit
-    def rasterize(coords,light_uv,triangles,map_x,map_y,mask):
-        conflicts=0
-        for fi in range(triangles.shape[0]):
-            a,b,c=triangles[fi,0],triangles[fi,1],triangles[fi,2]
-            x0=coords[a,0]*(width-1); y0=(1.0-coords[a,1])*(height-1)
-            x1=coords[b,0]*(width-1); y1=(1.0-coords[b,1])*(height-1)
-            x2=coords[c,0]*(width-1); y2=(1.0-coords[c,1])*(height-1)
-            min_x=max(0,int(np.floor(min(x0,x1,x2))))
-            max_x=min(width-1,int(np.ceil(max(x0,x1,x2))))
-            min_y=max(0,int(np.floor(min(y0,y1,y2))))
-            max_y=min(height-1,int(np.ceil(max(y0,y1,y2))))
-            denominator=(y1-y2)*(x0-x2)+(x2-x1)*(y0-y2)
-            if abs(denominator)<1e-8: continue
-            for py in range(min_y,max_y+1):
-                for px in range(min_x,max_x+1):
-                    wa=((y1-y2)*(px-x2)+(x2-x1)*(py-y2))/denominator
-                    wb=((y2-y0)*(px-x2)+(x0-x2)*(py-y2))/denominator
-                    wc=1.0-wa-wb
-                    if wa>=-1e-5 and wb>=-1e-5 and wc>=-1e-5:
-                        lu=wa*light_uv[a,0]+wb*light_uv[b,0]+wc*light_uv[c,0]
-                        lv=1.0-(wa*light_uv[a,1]+wb*light_uv[b,1]+wc*light_uv[c,1])
-                        if mask[py,px]:
-                            if abs(map_x[py,px]-lu)>0.002 or abs(map_y[py,px]-lv)>0.002:
-                                conflicts+=1
-                        else:
-                            map_x[py,px]=lu
-                            map_y[py,px]=lv
-                            mask[py,px]=1
-        return conflicts
+    with Image.open(atlas_path) as atlas:
+        width,height=atlas.size
+    with Image.open(lightmap_path) as lm_image:
+        if lm_image.size!=(width,height):
+            raise ValueError("India atlas and lightmap dimensions differ")
+        lightmap=np.asarray(lm_image.convert("RGB"),dtype=np.float32)/255.0
 
     map_x=np.zeros((height,width),dtype=np.float32)
     map_y=np.zeros((height,width),dtype=np.float32)
     mask=np.zeros((height,width),dtype=np.uint8)
-    conflicts=rasterize(uv0,uv1,faces,map_x,map_y,mask)
+    conflicts=0
+    for triangle in faces:
+        ia,ib,ic=map(int,triangle)
+        x0=uv0[ia,0]*(width-1); y0=(1.0-uv0[ia,1])*(height-1)
+        x1=uv0[ib,0]*(width-1); y1=(1.0-uv0[ib,1])*(height-1)
+        x2=uv0[ic,0]*(width-1); y2=(1.0-uv0[ic,1])*(height-1)
+        min_x=max(0,int(np.floor(min(x0,x1,x2))))
+        max_x=min(width-1,int(np.ceil(max(x0,x1,x2))))
+        min_y=max(0,int(np.floor(min(y0,y1,y2))))
+        max_y=min(height-1,int(np.ceil(max(y0,y1,y2))))
+        denominator=(y1-y2)*(x0-x2)+(x2-x1)*(y0-y2)
+        if abs(denominator)<1e-8: continue
+        gx=np.arange(min_x,max_x+1,dtype=np.float32)[None,:]
+        gy=np.arange(min_y,max_y+1,dtype=np.float32)[:,None]
+        wa=((y1-y2)*(gx-x2)+(x2-x1)*(gy-y2))/denominator
+        wb=((y2-y0)*(gx-x2)+(x0-x2)*(gy-y2))/denominator
+        wc=1.0-wa-wb
+        inside=(wa>=-1e-5)&(wb>=-1e-5)&(wc>=-1e-5)
+        if not np.any(inside): continue
+        lu=wa*uv1[ia,0]+wb*uv1[ib,0]+wc*uv1[ic,0]
+        lv=1.0-(wa*uv1[ia,1]+wb*uv1[ib,1]+wc*uv1[ic,1])
+        sy=slice(min_y,max_y+1); sx=slice(min_x,max_x+1)
+        local_mask=mask[sy,sx]
+        local_x=map_x[sy,sx]; local_y=map_y[sy,sx]
+        overlap=inside&(local_mask>0)
+        if np.any(overlap):
+            conflicts+=int(np.count_nonzero(overlap&((np.abs(local_x-lu)>0.002)|(np.abs(local_y-lv)>0.002))))
+        write=inside&(local_mask==0)
+        local_x[write]=lu[write]
+        local_y[write]=lv[write]
+        local_mask[write]=1
     ys,xs=np.nonzero(mask)
     if len(xs)==0: raise ValueError(f"India lightmap UV raster is empty: {obj_path.name}")
     if conflicts>max(64,int(len(xs)*0.001)):
         raise ValueError(f"India lightmap UV overlap conflict ({conflicts} pixels): {obj_path.name}")
 
-    lightmap=np.asarray(Image.open(lightmap_path).convert("RGB"),dtype=np.float32)/255.0
     px=np.clip(map_x[ys,xs]*(width-1),0,width-1)
     py=np.clip(map_y[ys,xs]*(height-1),0,height-1)
     x0=np.floor(px).astype(np.int32); y0=np.floor(py).astype(np.int32)
@@ -176,7 +182,8 @@ def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path
     c01=lightmap[y1,x0]; c11=lightmap[y1,x1]
     sampled=(c00*(1-fx)*(1-fy)+c10*fx*(1-fy)+c01*(1-fx)*fy+c11*fx*fy)
 
-    base=np.asarray(Image.open(atlas_path).convert("RGBA"),dtype=np.float32)/255.0
+    with Image.open(atlas_path) as atlas:
+        base=np.asarray(atlas.convert("RGBA"),dtype=np.float32)/255.0
     albedo=base[ys,xs,:3]
     albedo_linear=np.where(albedo<=0.04045,albedo/12.92,((albedo+0.055)/1.055)**2.4)
     # Unity's full-HDR lightmap decode multiplies the stored RGB by two.
