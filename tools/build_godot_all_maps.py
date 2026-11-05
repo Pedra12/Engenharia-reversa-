@@ -66,17 +66,6 @@ def main():
     draw.polygon([(125,365),(195,125),(270,125),(387,365),(302,365),(278,300),(213,300),(190,365)],fill=(230,245,250,255))
     draw.rectangle((228,235,263,270),fill=(54,190,235,255))
     icon.save(PROJECT/"icon.png")
-    # Recover the original blue water tile from the Unity environment atlas.
-    atlas_path=ROOT/"exported_textures"/"sharedassets1.assets__65__t_atlas_environment.png"
-    if atlas_path.exists():
-        atlas=Image.open(atlas_path).convert("RGBA")
-        # The source atlas is 2048x2048. Crop the actual blue water tile,
-        # not the brown empty atlas margin (the old coordinates were scaled
-        # for a 1280px preview and produced a solid brown texture).
-        water_tile=atlas.crop((72,956,474,1358)).resize((512,512),Image.Resampling.LANCZOS)
-        water_tile.save(textures/"deluxe_pool_water.png")
-    else:
-        print("DELUXE_POOL_WATER_TEXTURE_MISSING")
     all_meshes=set(); all_textures=set(); catalog=[]
     for mapid in MAPS:
         path=ROOT/"maps"/(mapid+".json")
@@ -436,8 +425,6 @@ func _load_map(id:String,title:String):
         push_error("Invalid map manifest "+id)
         return
     _build_node(d.root,world,id)
-    if id=="lvl_deluxe_fest":
-        _add_deluxe_pool_water()
     _create_camera()
     _fit_camera()
     home_panel.visible=false
@@ -591,41 +578,6 @@ func _mat(ms:Array,object_name:String="")->StandardMaterial3D:
         sm.roughness=0.16
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
     return sm
-func _add_deluxe_pool_water():
-    # The original Deluxe Fest minimap and recovered mesh show three recessed
-    # rectangular pools. Restore their missing water surfaces with the original
-    # blue atlas tile. These are visual-only planes: no collision is added, so
-    # the two internal stairways remain walkable and visible below the water.
-    var water_texture=load("res://assets/textures/deluxe_pool_water.png") as Texture2D
-    if water_texture==null:
-        push_warning("Deluxe pool water texture could not be loaded")
-        return
-    var material=StandardMaterial3D.new()
-    material.albedo_texture=water_texture
-    # Use the recovered blue water atlas tile at full opacity. The previous
-    # alpha blend mixed the pool floor into the water and made it look green.
-    material.albedo_color=Color(1.0,1.0,1.0,1.0)
-    material.transparency=BaseMaterial3D.TRANSPARENCY_DISABLED
-    material.roughness=0.24
-    material.cull_mode=BaseMaterial3D.CULL_DISABLED
-    material.uv1_scale=Vector3(3.0,3.0,1.0)
-    material.render_priority=1
-    var pools=[
-        {"center":Vector3(-47.5,0.14,2.5),"size":Vector2(16.5,10.5)},
-        {"center":Vector3(-12.4,0.14,2.5),"size":Vector2(21.0,10.5)},
-        {"center":Vector3(18.8,0.14,2.5),"size":Vector2(22.0,10.5)}
-    ]
-    for index in range(pools.size()):
-        var surface=MeshInstance3D.new()
-        surface.name="RecoveredPoolWater_"+str(index+1)
-        var plane=PlaneMesh.new()
-        plane.size=pools[index].size
-        surface.mesh=plane
-        surface.material_override=material
-        surface.position=pools[index].center
-        surface.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-        world.add_child(surface)
-    print("DELUXE_POOL_WATER_CREATED count=",pools.size()," collision=none")
 func _create_camera():
     camera_pivot=Node3D.new()
     camera_pivot.name="ExplorerCameraPivot"
@@ -1141,6 +1093,11 @@ func _lighting():
     var sun=DirectionalLight3D.new()
     sun.rotation_degrees=Vector3(-52,-32,0)
     sun.light_energy=1.1
+    # Preserve the existing neutral daylight, but enable real directional
+    # shadows so buildings and terrain have depth instead of flat illumination.
+    sun.shadow_enabled=true
+    sun.directional_shadow_max_distance=180.0
+    sun.shadow_bias=0.04
     add_child(sun)
 '''
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
