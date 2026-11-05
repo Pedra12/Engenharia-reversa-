@@ -159,6 +159,13 @@ def main():
      r={"source":src,"path_id":pid,"type":t,"name":str(name)[:220],"refs":[]}
      if t=="MeshRenderer":
       r["static_batch_info"]=static_batch_info(d)
+      # Preserve Unity's baked-lighting metadata so lightmaps can be mapped
+      # to the correct static-batched submesh instead of guessed by filename.
+      for field in ("m_LightmapIndex","m_LightmapST","m_LightmapScaleOffset",
+                    "m_ReceiveGI","m_ReceiveShadows","m_ReflectionProbeUsage",
+                    "m_LightProbeUsage","m_ScaleInLightmap","m_StitchSeams"):
+       value=attr(d,field)
+       if value is not None: r[field]=val(value)
      if t=="Mesh":
       r["uv_channels"]=uv_summary
       if (src,pid) in uv_channel_exports: r["uv_channel_export"]=uv_channel_exports[(src,pid)]
