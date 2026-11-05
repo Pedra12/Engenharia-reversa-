@@ -21,8 +21,7 @@ FIELDS = {
  "Animation": ("m_GameObject","m_Animations"),
  "Material": ("m_Shader",),
  "MonoBehaviour": ("m_GameObject","m_Script"),
- "Rigidbody": ("m_GameObject",), "Light": ("m_GameObject",),
- "RenderSettings": ("m_SkyboxMaterial",), "LightmapSettings": ("m_Lightmaps",), "Camera": ("m_GameObject",)
+ "Rigidbody": ("m_GameObject",), "Light": ("m_GameObject",), "Camera": ("m_GameObject",)
 }
 TRANSFORMS = {"Transform","RectTransform"}
 
@@ -58,7 +57,7 @@ def val(v):
  if v is None or isinstance(v,(str,int,float,bool)): return v
  if isinstance(v,(list,tuple)): return [val(x) for x in v[:16]]
  d={}
- for k in ("x","y","z","w","r","g","b","a"):
+ for k in ("x","y","z","w"):
   try:
    x=getattr(v,k)
    if isinstance(x,(int,float)): d[k]=x
@@ -136,11 +135,6 @@ def main():
       except Exception as mesh_error:
        errors.append({"source":src,"path_id":pid,"type":t,"error":"mesh export: "+str(mesh_error)[:220]})
      r={"source":src,"path_id":pid,"type":t,"name":str(name)[:220],"refs":[]}
-     if t=="Light":
-      sh=attr(d,"m_Shadows")
-      r["light_data"]={"type":val(attr(d,"m_Type")),"enabled":val(attr(d,"m_Enabled")),"color":val(attr(d,"m_Color")),"intensity":val(attr(d,"m_Intensity")),"range":val(attr(d,"m_Range")),"spot_angle":val(attr(d,"m_SpotAngle")),"inner_spot_angle":val(attr(d,"m_InnerSpotAngle")),"shadow_type":val(attr(sh,"m_Type")) if sh is not None else 0,"shadow_strength":val(attr(sh,"m_Strength")) if sh is not None else 0}
-     if t=="RenderSettings":
-      r["render_data"]={k:val(attr(d,k)) for k in ("m_AmbientMode","m_AmbientSkyColor","m_AmbientEquatorColor","m_AmbientGroundColor","m_AmbientIntensity","m_Fog","m_FogColor","m_FogDensity","m_FogStartDistance","m_FogEndDistance")}
      if t=="MeshRenderer":
       r["static_batch_info"]=static_batch_info(d)
      counts[t]+=1
@@ -220,40 +214,6 @@ def main():
     root_go=level_gameobjects.get(map_root.get("game_object"))
     map_name=root_go["name"] if root_go else map_root["name"]
     manifest={"source_level":level,"map_root":map_name,"root_transform_path_id":int(map_root["path_id"]),"node_count":0,"mesh_exports":sorted({v for v in mesh_exports.values()}),"root":build_node(int(map_root["path_id"]),set())}
-    # Recover scene lights even when Unity stores them outside the lvl_* geometry root.
-    def qm(a,b):
-     x,y,z,w=a; X,Y,Z,W=b
-     return (w*X+x*W+y*Z-z*Y,w*Y-x*Z+y*W+z*X,w*Z+x*Y-y*X+z*W,w*W-x*X-y*Y-z*Z)
-    def qr(q,v):
-     x,y,z,w=q; a,b,c=v
-     tx=2*(y*c-z*b); ty=2*(z*a-x*c); tz=2*(x*b-y*a)
-     return (a+w*tx+y*tz-z*ty,b+w*ty+z*tx-x*tz,c+w*tz+x*ty-y*tx)
-    def vec(v,default):
-     if not isinstance(v,dict): return default
-     return tuple(float(v.get(k,default[i]) or 0) for i,k in enumerate(("x","y","z")))
-    def wt(tid,seen=None):
-     seen=set() if seen is None else seen
-     if tid in seen: return ((0,0,0),(0,0,0,1),(1,1,1))
-     seen.add(tid); tr=records.get((level,int(tid)))
-     if not tr: return ((0,0,0),(0,0,0,1),(1,1,1))
-     p=vec(tr.get("m_LocalPosition"),(0,0,0)); qv=tr.get("m_LocalRotation") or {}
-     q=tuple(float(qv.get(k,d)) for k,d in (("x",0),("y",0),("z",0),("w",1)))
-     sc=vec(tr.get("m_LocalScale"),(1,1,1)); par=int(tr.get("parent",0) or 0)
-     if not par: return p,q,sc
-     pp,pq,ps=wt(par,seen); rp=qr(pq,(p[0]*ps[0],p[1]*ps[1],p[2]*ps[2]))
-     return (pp[0]+rp[0],pp[1]+rp[1],pp[2]+rp[2]),qm(pq,q),(ps[0]*sc[0],ps[1]*sc[1],ps[2]*sc[2])
-    manifest["lights"]=[]
-    for lr in records.values():
-     if lr.get("source")!=level or lr.get("type")!="Light": continue
-     gr=next((x for x in lr.get("refs",[]) if x.get("field")=="m_GameObject"),None)
-     if not gr: continue
-     go=level_gameobjects.get(int(gr["path_id"]))
-     if not go or not bool(go.get("active",True)): continue
-     tr=next((x for x in level_transforms.values() if int(x.get("game_object") or 0)==int(gr["path_id"])),None)
-     if not tr: continue
-     pos,rot,scale=wt(int(tr["path_id"])); ld=lr.get("light_data",{})
-     manifest["lights"].append({"name":go.get("name") or "RecoveredLight","type":ld.get("type",2),"enabled":ld.get("enabled",True),"position":{"x":pos[0],"y":pos[1],"z":pos[2]},"rotation":{"x":rot[0],"y":rot[1],"z":rot[2],"w":rot[3]},"color":ld.get("color") or {},"intensity":ld.get("intensity",1.0),"range":ld.get("range",10.0),"spot_angle":ld.get("spot_angle",30.0),"inner_spot_angle":ld.get("inner_spot_angle",0.0),"shadow_type":ld.get("shadow_type",0),"shadow_strength":ld.get("shadow_strength",0.0)})
-    manifest["render_settings"]=next((x.get("render_data",{}) for x in records.values() if x.get("source")==level and x.get("type")=="RenderSettings"),{})
     def count_nodes(n):
      return 1+sum(count_nodes(c) for c in n.get("children",[]))
     manifest["node_count"]=count_nodes(manifest["root"])
