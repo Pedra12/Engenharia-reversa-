@@ -18,6 +18,37 @@ def obj_stats(path):
     elif line.startswith("f "): fc+=1
  except OSError: return {"missing":True,"vertices":0,"faces":0}
  return {"missing":False,"vertices":v,"faces":fc}
+def obj_size(path,first_submesh=None,submesh_count=None):
+ p=GRAPH/path
+ if not p.exists(): return [0.0,0.0,0.0]
+ vertices=[]; groups=[]; current=None
+ try:
+  with p.open(errors="ignore") as src:
+   for line in src:
+    if line.startswith("v "):
+     try: vertices.append(tuple(map(float,line.split()[1:4])))
+     except (ValueError,IndexError): pass
+    elif line.startswith("g "):
+     if current is not None: groups.append(current)
+     current=[]
+    elif line.startswith("f ") and current is not None:
+     ids=[]
+     for token in line.split()[1:]:
+      try: ids.append(int(token.split("/")[0])-1)
+      except ValueError: pass
+     current.extend(ids)
+  if current is not None: groups.append(current)
+ except OSError: return [0.0,0.0,0.0]
+ if first_submesh is not None and submesh_count:
+  usable=[g for g in groups if g]
+  selected=usable[int(first_submesh):int(first_submesh)+int(submesh_count)]
+  indices={i for group in selected for i in group if 0<=i<len(vertices)}
+  points=[vertices[i] for i in indices]
+ else:
+  points=vertices
+ if not points: return [0.0,0.0,0.0]
+ return [max(v[i] for v in points)-min(v[i] for v in points) for i in range(3)]
+
 def obj_surface_features(path,scale_y=1.0):
  p=GRAPH/path
  if not p.exists(): return {"missing":True,"bounds":None,"horizontal_levels":[],"stair_geometry_candidate":False}
@@ -139,6 +170,13 @@ def main():
   d=json.loads(f.read_text()); counts=collections.Counter(); stairs=[]; interiors=[]; missing=[]; colliders=[]; materials=set(); textures=set(); meshrefs=set(); geometry={}
   def walk(n,path=""):
    name=str(n.get("name","")); p=path+"/"+name; comps=n.get("components",[]); counts["nodes"]+=1
+   render_obj=""
+   batch=None
+   for component in comps:
+    if component.get("type")=="MeshFilter":
+     render_obj=next((ref.get("exported_obj","") for ref in component.get("references",[]) if ref.get("field")=="m_Mesh"),"")
+    elif component.get("type")=="MeshRenderer":
+     batch=component.get("static_batch_info")
    if PAT["stairs"].search(name): stairs.append(p)
    if PAT["interior"].search(name): interiors.append(p)
    for c in comps:
@@ -149,7 +187,14 @@ def main():
       meshrefs.add(obj)
       if ref.get("field")=="m_Mesh" and typ=="MeshCollider":
        scale=n.get("scale") or {}
-       correction=n.get("godot_collider_correction") or {}
+       first=int((batch or {}).get("first_sub_mesh") or 0)
+       count=int((batch or {}).get("sub_mesh_count") or 0)
+       visual_size=obj_size(render_obj,first,count) if render_obj else [0.0,0.0,0.0]
+       collider_size=obj_size(obj)
+       correction={"x":1.0,"y":1.0,"z":1.0}
+       for axis,key in enumerate(("x","y","z")):
+        if visual_size[axis]>0.02 and collider_size[axis]>visual_size[axis]*4.0:
+         correction[key]=visual_size[axis]/collider_size[axis]
        scale_y=float(scale.get("y",1.0) or 1.0)*float(correction.get("y",1.0) or 1.0)
        colliders.append({"node":name,"mesh":obj,"scale_y":scale_y,"scale":scale,"correction":correction,"position":n.get("position") or {},"stats":obj_stats(obj),"surface_features":obj_surface_features(obj,scale_y)})
       if not (GRAPH/obj).exists(): missing.append(obj)
