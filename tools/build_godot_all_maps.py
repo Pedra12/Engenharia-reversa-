@@ -661,7 +661,6 @@ func _audit_all_maps():
             move_vector=Vector2.ZERO
             walk_yaw=saved_stair_yaw
             var climb_height=player.global_position.y-stair_start_y
-            var route_distance=Vector2(player.global_position.x-player.global_position.x+0.0,player.global_position.z-player.global_position.z+0.0).length()
             var passed=climb_height>=minf(0.25,float(route.get("rise",0.5))*0.45) and player.is_on_floor()
             print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," grounded=",player.is_on_floor()," climb_height=",climb_height," expected_rise=",route.get("rise",0.0)," passed=",passed)
             if passed:
