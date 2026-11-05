@@ -468,7 +468,7 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             for surface_index in range(mi.mesh.get_surface_count()):
                 if mats.size()>0:
                     var material_index=min(surface_index,mats.size()-1)
-                    var surface_material=_mat([mats[material_index]],String(d.get("name","")))
+                    var surface_material=_mat([mats[material_index]],String(d.get("name","")),map_id=="lvl_india")
                     if surface_material:
                         mi.set_surface_override_material(surface_index,surface_material)
     # Only use recovered Unity MeshCollider data, not every visible render mesh.
@@ -554,7 +554,7 @@ func _v(x:Variant,fb:Vector3)->Vector3:
     if x is Dictionary:
         return Vector3(float(x.get("x",fb.x)),float(x.get("y",fb.y)),float(x.get("z",fb.z)))
     return fb
-func _mat(ms:Array,object_name:String="")->StandardMaterial3D:
+func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
     if ms.is_empty(): return null
     var m=ms[0]
     var material_name=String(m.get("name","")).to_lower()
@@ -577,6 +577,28 @@ func _mat(ms:Array,object_name:String="")->StandardMaterial3D:
         sm.albedo_color=Color(0.28,0.58,0.72,0.58)
         sm.roughness=0.16
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
+    # India-only finish: keep the recovered Unity atlas as the base color and
+    # add very subtle, UV-aligned micro-surface variation. No geometry, UVs,
+    # lighting, collision, or materials on other maps are changed.
+    if india_detail and sm.albedo_texture and not material_name.contains("alpha") and not object_lower.contains("alpha"):
+        var detail_shader=Shader.new()
+        detail_shader.code = """
+shader_type spatial;
+uniform sampler2D base_texture : source_color, filter_linear_mipmap;
+void fragment() {
+    vec4 base = texture(base_texture, UV);
+    vec2 cell = floor(UV * vec2(512.0, 512.0));
+    float grain = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+    float variation = (grain - 0.5) * 0.045;
+    ALBEDO = max(base.rgb * (1.0 + variation), vec3(0.0));
+    ROUGHNESS = 0.78 + grain * 0.16;
+}
+"""
+        var detailed=ShaderMaterial.new()
+        detailed.shader=detail_shader
+        detailed.set_shader_parameter("base_texture",sm.albedo_texture)
+        print("INDIA_TEXTURE_DETAIL_ACTIVE material=",material_name," object=",object_name)
+        return detailed
     return sm
 func _create_camera():
     camera_pivot=Node3D.new()
