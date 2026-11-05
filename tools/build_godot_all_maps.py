@@ -577,27 +577,76 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
         sm.albedo_color=Color(0.28,0.58,0.72,0.58)
         sm.roughness=0.16
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
-    # India-only finish: keep the recovered Unity atlas as the base color and
-    # add very subtle, UV-aligned micro-surface variation. No geometry, UVs,
-    # lighting, collision, or materials on other maps are changed.
+    # India-only material finish. Preserve the recovered atlas exactly as the
+    # color source, then add world-space layered wear, dust and roughness detail.
+    # World-space noise works with the recovered single-UV OBJ meshes; the
+    # original Unity lightmaps are deliberately NOT sampled because these OBJ
+    # exports do not contain a verified second/lightmap UV channel.
     if india_detail and sm.albedo_texture and not material_name.contains("alpha") and not object_lower.contains("alpha"):
         var detail_shader=Shader.new()
         detail_shader.code = """
 shader_type spatial;
 uniform sampler2D base_texture : source_color, filter_linear_mipmap;
+varying vec3 india_world_pos;
+varying vec3 india_world_normal;
+float india_hash(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
+float india_noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n000 = india_hash(i + vec3(0.0, 0.0, 0.0));
+    float n100 = india_hash(i + vec3(1.0, 0.0, 0.0));
+    float n010 = india_hash(i + vec3(0.0, 1.0, 0.0));
+    float n110 = india_hash(i + vec3(1.0, 1.0, 0.0));
+    float n001 = india_hash(i + vec3(0.0, 0.0, 1.0));
+    float n101 = india_hash(i + vec3(1.0, 0.0, 1.0));
+    float n011 = india_hash(i + vec3(0.0, 1.0, 1.0));
+    float n111 = india_hash(i + vec3(1.0, 1.0, 1.0));
+    float x00 = mix(n000, n100, f.x);
+    float x10 = mix(n010, n110, f.x);
+    float x01 = mix(n001, n101, f.x);
+    float x11 = mix(n011, n111, f.x);
+    return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+void vertex() {
+    india_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+    india_world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
+}
 void fragment() {
     vec4 base = texture(base_texture, UV);
-    vec2 cell = floor(UV * vec2(512.0, 512.0));
-    float grain = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
-    float variation = (grain - 0.5) * 0.045;
-    ALBEDO = max(base.rgb * (1.0 + variation), vec3(0.0));
-    ROUGHNESS = 0.78 + grain * 0.16;
+    float hi = max(max(base.r, base.g), base.b);
+    float lo = min(min(base.r, base.g), base.b);
+    float saturation = hi - lo;
+    // Keep saturated signs, windows and painted props close to their source.
+    float neutral_surface = 1.0 - smoothstep(0.14, 0.48, saturation);
+    float detail_mask = mix(0.28, 1.0, neutral_surface);
+    float broad_wear = india_noise(india_world_pos * 0.42);
+    float surface_mottle = india_noise(india_world_pos * 2.8);
+    float fine_grain = india_noise(india_world_pos * 18.0);
+    float pores = india_noise(india_world_pos * 54.0);
+    float variation = (broad_wear - 0.5) * 0.16
+                    + (surface_mottle - 0.5) * 0.13
+                    + (fine_grain - 0.5) * 0.075
+                    + (pores - 0.5) * 0.035;
+    float horizontal = smoothstep(0.52, 0.94, abs(normalize(india_world_normal).y));
+    float dust_noise = india_noise(india_world_pos * 0.78 + vec3(13.7, 2.1, 7.4));
+    float dust = smoothstep(0.48, 0.82, dust_noise) * (0.025 + horizontal * 0.055);
+    vec3 worn = base.rgb * (1.0 + variation * detail_mask);
+    vec3 dust_tint = worn * vec3(1.09, 1.035, 0.94);
+    ALBEDO = max(mix(worn, dust_tint, dust * detail_mask), vec3(0.0));
+    ROUGHNESS = mix(0.72, 0.97, india_noise(india_world_pos * 4.2));
+    METALLIC = 0.0;
+    SPECULAR = 0.18;
 }
 """
         var detailed=ShaderMaterial.new()
         detailed.shader=detail_shader
         detailed.set_shader_parameter("base_texture",sm.albedo_texture)
-        print("INDIA_TEXTURE_DETAIL_ACTIVE material=",material_name," object=",object_name)
+        print("INDIA_LAYERED_SURFACE_DETAIL_ACTIVE material=",material_name," object=",object_name)
         return detailed
     return sm
 func _create_camera():
