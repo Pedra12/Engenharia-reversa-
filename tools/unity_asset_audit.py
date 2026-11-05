@@ -120,6 +120,19 @@ def main():
                                     thumb=im.convert("RGB"); thumb.thumbnail((180,120))
                                     previews.append((thumb.copy(),str(name or pid)[:42]))
                         except Exception as e: row["export_error"]="image: "+str(e)[:250]
+                    elif typ=="Material":
+                        # Preserve serialized Unity material settings instead of guessing
+                        # colors/textures/shaders later in the Godot conversion.
+                        material_fields=selected_fields(data,[
+                            "m_Name","m_Shader","m_SavedProperties","m_CustomRenderQueue",
+                            "m_EnableInstancing","m_DoubleSidedGI","m_ValidKeywords",
+                            "m_InvalidKeywords","m_LightmapFlags","m_Flags"
+                        ])
+                        row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]
+                        try:
+                            shader=getattr(data,"m_Shader",None)
+                            row["shader_path_id"]=str(getattr(shader,"path_id","") or "")
+                        except Exception: pass
                     elif typ=="Mesh":
                         try:
                             result=data.export()
