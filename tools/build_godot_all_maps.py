@@ -186,13 +186,14 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         if len(indices)==0: continue
         index_view=add_view(indices.astype("<u4").tobytes(),34963)
         index_acc=add_accessor(index_view,5125,len(indices),"SCALAR",int(indices.min()),int(indices.max()))
-        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"mode":4})
+        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"material":0,"mode":4})
         triangle_count+=len(indices)//3
     if not primitives: raise ValueError(f"No India GLB primitives generated: {obj_path.name}")
 
     gltf={"asset":{"version":"2.0","generator":"BlockGun India offline lightmap baker"},
           "scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
           "meshes":[{"primitives":primitives}],
+          "materials":[{"name":"India baked lightmap vertex colors","pbrMetallicRoughness":{"baseColorFactor":[1.0,1.0,1.0,1.0],"metallicFactor":0.0,"roughnessFactor":1.0}}],
           "buffers":[{"byteLength":len(binary)}],"bufferViews":views,"accessors":accessors}
     json_chunk=json.dumps(gltf,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     while len(json_chunk)%4: json_chunk+=b" "
@@ -650,9 +651,11 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             render_mesh=mesh_resource as Mesh
         elif mesh_resource is PackedScene:
             var imported_scene=(mesh_resource as PackedScene).instantiate()
-            var imported_instance=imported_scene.find_child("*","MeshInstance3D",true,false) as MeshInstance3D
-            if imported_instance:
-                render_mesh=imported_instance.mesh
+            var imported_instances=imported_scene.find_children("*","MeshInstance3D",true,false)
+            if not imported_instances.is_empty():
+                var imported_instance=imported_instances[0] as MeshInstance3D
+                if imported_instance:
+                    render_mesh=imported_instance.mesh
             imported_scene.free()
         if render_mesh:
             var mi=MeshInstance3D.new()
