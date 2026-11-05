@@ -77,10 +77,11 @@ def _cluster_xz(points,eps=1.2,min_count=3):
    found.append((sum(points[i][0] for i in group)/len(group),sum(points[i][1] for i in group)/len(group)))
  return found
 
-def stair_route_candidates(mesh_path,scale,position,node_name):
+def stair_route_candidates(mesh_path,scale,position,node_name,correction=None):
  p=GRAPH/mesh_path
  if not p.exists(): return []
- sx,sy,sz=(float(scale.get(k,1.0) or 1.0) for k in ("x","y","z"))
+ correction=correction or {}
+ sx,sy,sz=(float(scale.get(k,1.0) or 1.0)*float(correction.get(k,1.0) or 1.0) for k in ("x","y","z"))
  px,py,pz=(float(position.get(k,0.0) or 0.0) for k in ("x","y","z"))
  vertices=[]; faces=[]
  try:
@@ -147,8 +148,10 @@ def main():
      if obj:
       meshrefs.add(obj)
       if ref.get("field")=="m_Mesh" and typ=="MeshCollider":
-       scale_y=float((n.get("scale") or {}).get("y",1.0) or 1.0)
-       colliders.append({"node":name,"mesh":obj,"scale_y":scale_y,"scale":n.get("scale") or {},"position":n.get("position") or {},"stats":obj_stats(obj),"surface_features":obj_surface_features(obj,scale_y)})
+       scale=n.get("scale") or {}
+       correction=n.get("godot_collider_correction") or {}
+       scale_y=float(scale.get("y",1.0) or 1.0)*float(correction.get("y",1.0) or 1.0)
+       colliders.append({"node":name,"mesh":obj,"scale_y":scale_y,"scale":scale,"correction":correction,"position":n.get("position") or {},"stats":obj_stats(obj),"surface_features":obj_surface_features(obj,scale_y)})
       if not (GRAPH/obj).exists(): missing.append(obj)
      png=ref.get("exported_png")
      if png:
@@ -169,7 +172,7 @@ def main():
   for obj in level_meshes: geometry[obj]=obj_stats(obj)
   stair_routes=[]
   for c in colliders:
-   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"]))
+   stair_routes.extend(stair_route_candidates(c["mesh"],c["scale"],c["position"],c["node"],c.get("correction")))
   stair_routes.sort(key=lambda r:(r["steps"],r["rise"],-abs(r["horizontal_distance"]-1.0)),reverse=True)
   report={"map":f.stem,"unity_level":level,"stair_route_candidates":stair_routes,"nodes":counts["nodes"],"meshfilters":counts["MeshFilter"],"renderers":counts["MeshRenderer"],"meshcolliders":counts["MeshCollider"],"referenced_meshes":len(meshrefs),"level_combined_meshes":len(level_meshes),"level_vertices":sum(x["vertices"] for x in geometry.values()),"level_faces":sum(x["faces"] for x in geometry.values()),"materials":len(materials),"textures":len([x for x in textures if x]),"stairs_named":len(stairs),"interior_named":len(interiors),"missing_exports":len(set(missing)),"stair_candidates":stairs[:100],"stair_geometry_candidates":[{"node":c["node"],"mesh":c["mesh"],"scale_y":c["scale_y"],"treads":c["surface_features"]["candidate_tread_sequence"]} for c in colliders if c["surface_features"]["stair_geometry_candidate"]],"interior_candidates":interiors[:250],"collider_meshes":colliders,"geometry_files":geometry,"missing_assets":sorted(set(missing))}
   reports.append(report); global_missing+=report["missing_exports"]
