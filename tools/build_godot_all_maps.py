@@ -685,6 +685,10 @@ func _audit_all_maps():
                     stair_query.collision_mask=1
                     stair_query.hit_back_faces=true
                     stair_query.exclude=[player.get_rid()]
+                    var target_collider_name="RecoveredUnityCollider_"+String(route.get("node",""))
+                    for other_collider in world.find_children("*","StaticBody3D",true,false):
+                        if String(other_collider.name)!=target_collider_name:
+                            stair_query.exclude.append(other_collider.get_rid())
                     var candidate_hit=get_world_3d().direct_space_state.intersect_ray(stair_query)
                     if not candidate_hit.is_empty() and abs(candidate_hit.normal.dot(Vector3.UP))>0.70 and offset.length()<best_probe_distance:
                         stair_hit=candidate_hit
