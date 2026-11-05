@@ -205,7 +205,6 @@ screen/immersive_mode=true
 const MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
 const TITLES=["Baghdad","Assalto","Oriente Medio","Resort","Floresta","Casa","India","Roma","Festival Deluxe"]
 var world:Node3D
-var world_environment:WorldEnvironment
 var menu:Control
 var home_panel:PanelContainer
 var selection_panel:PanelContainer
@@ -426,8 +425,6 @@ func _load_map(id:String,title:String):
         push_error("Invalid map manifest "+id)
         return
     _build_node(d.root,world,id)
-    _build_lights(d.get("lights",[]),world,id)
-    _apply_render_settings(d.get("render_settings",{}))
     _create_camera()
     _fit_camera()
     home_panel.visible=false
@@ -1079,7 +1076,7 @@ func _zoom(factor:float):
     if camera:
         camera.position=Vector3(0,0,camera_distance)
 func _lighting():
-    world_environment=WorldEnvironment.new()
+    var env=WorldEnvironment.new()
     var e=Environment.new()
     e.background_mode=Environment.BG_SKY
     var sky=Sky.new()
@@ -1091,62 +1088,17 @@ func _lighting():
     e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
     e.ambient_light_color=Color(.65,.7,.76)
     e.ambient_light_energy=.75
-    world_environment.environment=e
-    add_child(world_environment)
-
-func _apply_render_settings(data:Dictionary):
-    if world_environment==null or world_environment.environment==null:
-        return
-    var e=world_environment.environment
-    var c=data.get("m_AmbientSkyColor",{})
-    if c is Dictionary and c.has("r"):
-        e.ambient_light_color=Color(float(c.get("r",0.65)),float(c.get("g",0.7)),float(c.get("b",0.76)),1.0)
-    var energy=float(data.get("m_AmbientIntensity",0.75) or 0.75)
-    e.ambient_light_energy=clampf(energy,0.05,2.5)
-    if bool(data.get("m_Fog",false)):
-        var fc=data.get("m_FogColor",{})
-        if fc is Dictionary and fc.has("r"):
-            e.fog_light_color=Color(float(fc.get("r",0.7)),float(fc.get("g",0.75)),float(fc.get("b",0.8)),1.0)
-        e.fog_enabled=true
-        e.fog_density=clampf(float(data.get("m_FogDensity",0.002) or 0.002),0.0001,0.05)
-    else:
-        e.fog_enabled=false
-
-func _build_lights(items:Array,parent:Node3D,map_id:String):
-    var created:=0
-    for item in items:
-        if not bool(item.get("enabled",true)):
-            continue
-        var kind=int(item.get("type",2))
-        var light:Light3D
-        if kind==1:
-            light=DirectionalLight3D.new()
-        elif kind==0:
-            light=SpotLight3D.new()
-        else:
-            light=OmniLight3D.new()
-        light.name=String(item.get("name","RecoveredLight")).replace("/","_")
-        var p=_v(item.get("position",{}),Vector3.ZERO)
-        light.position=Vector3(-p.x,p.y,p.z)
-        var q=item.get("rotation",{})
-        light.quaternion=Quaternion(float(q.get("x",0)), -float(q.get("y",0)), -float(q.get("z",0)), float(q.get("w",1))).normalized()
-        var c=item.get("color",{})
-        if c is Dictionary:
-            light.light_color=Color(float(c.get("r",1)),float(c.get("g",1)),float(c.get("b",1)),float(c.get("a",1)))
-        light.light_energy=clampf(float(item.get("intensity",1.0) or 1.0),0.0,8.0)
-        if light is OmniLight3D:
-            light.omni_range=clampf(float(item.get("range",10.0) or 10.0),0.5,70.0)
-        elif light is SpotLight3D:
-            light.spot_range=clampf(float(item.get("range",10.0) or 10.0),0.5,70.0)
-            light.spot_angle=clampf(float(item.get("spot_angle",30.0) or 30.0),1.0,89.0)
-        # Keep expensive real-time shadows limited to each map's original sun.
-        if light is DirectionalLight3D:
-            light.shadow_enabled=int(item.get("shadow_type",0))>0
-            light.directional_shadow_max_distance=180.0
-            light.shadow_bias=0.04
-        parent.add_child(light)
-        created+=1
-    print("MAP_LIGHTS_LOADED ",map_id," count=",created)
+    env.environment=e
+    add_child(env)
+    var sun=DirectionalLight3D.new()
+    sun.rotation_degrees=Vector3(-52,-32,0)
+    sun.light_energy=1.1
+    # Preserve the existing neutral daylight, but enable real directional
+    # shadows so buildings and terrain have depth instead of flat illumination.
+    sun.shadow_enabled=true
+    sun.directional_shadow_max_distance=180.0
+    sun.shadow_bias=0.04
+    add_child(sun)
 '''
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
     readme="# Block Gun | Explorador 3D de mapas\n\nAPK de visualização técnica dos nove mapas recuperados do Unity. A câmera enquadra automaticamente a geometria encontrada; arraste com um dedo para orbitar e use pinça para aproximar ou afastar. O botão reenquadra o mapa.\n\nAinda não contém personagem, bots ou gameplay. A completude de cada cenário depende dos modelos e texturas que puderam ser recuperados do arquivo original.\n"
