@@ -76,16 +76,16 @@ def enhance_india_atlas(source:pathlib.Path,destination:pathlib.Path):
     result.save(destination,optimize=True)
 
 
-def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path:pathlib.Path,
-                        atlas_path:pathlib.Path,output_path:pathlib.Path,
-                        first_sub_mesh:int=0,sub_mesh_count:int=0):
-    """Bake one Unity renderer's original lightmap into its own India atlas copy."""
+def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path:pathlib.Path,
+                                 output_path:pathlib.Path,first_sub_mesh:int=0,sub_mesh_count:int=0):
+    """Create a GLB with original UV0 and baked Unity lightmap in vertex colors."""
     try:
         import numpy as np
     except ImportError:
         import subprocess, sys
         subprocess.check_call([sys.executable,"-m","pip","install","--disable-pip-version-check","numpy"])
         import numpy as np
+    import struct
 
     uv_data=json.loads(uv_path.read_text(encoding="utf-8"))
     uv0=np.asarray(uv_data.get("m_UV0",[]),dtype=np.float32)
@@ -95,10 +95,16 @@ def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path
     if np.any(uv0 < -0.001) or np.any(uv0 > 1.001) or np.any(uv1 < -0.001) or np.any(uv1 > 1.001):
         raise ValueError(f"India UV coordinates outside 0..1: {uv_path.name}")
 
-    groups=[]; current=None
+    positions=[]; normals=[]; texcoords=[]; groups=[]; current=None
     with obj_path.open(encoding="utf-8",errors="replace") as source:
         for line in source:
-            if line.startswith("g "):
+            if line.startswith("v "):
+                positions.append(tuple(map(float,line.split()[1:4])))
+            elif line.startswith("vn "):
+                normals.append(tuple(map(float,line.split()[1:4])))
+            elif line.startswith("vt "):
+                texcoords.append(tuple(map(float,line.split()[1:3])))
+            elif line.startswith("g "):
                 if current is not None: groups.append(current)
                 current=[]
             elif line.startswith("f "):
@@ -106,16 +112,16 @@ def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path
                 face=[]
                 for token in line.split()[1:]:
                     parts=token.split("/")
-                    if len(parts)<2: raise ValueError(f"OBJ face has no UV index: {obj_path.name}")
-                    vertex_index=int(parts[0])-1
-                    uv_index=int(parts[1])-1
-                    if vertex_index!=uv_index:
-                        raise ValueError(f"OBJ vertex/UV ordering differs: {obj_path.name}")
-                    face.append(vertex_index)
+                    if len(parts)<3: raise ValueError(f"OBJ face lacks UV/normal: {obj_path.name}")
+                    vi,ti,ni=(int(parts[0])-1,int(parts[1])-1,int(parts[2])-1)
+                    if vi!=ti or vi!=ni:
+                        raise ValueError(f"OBJ vertex/UV/normal ordering differs: {obj_path.name}")
+                    face.append(vi)
                 if len(face)<3: continue
-                for i in range(1,len(face)-1):
-                    current.append((face[0],face[i],face[i+1]))
+                for i in range(1,len(face)-1): current.append((face[0],face[i],face[i+1]))
     if current is not None: groups.append(current)
+    if len(positions)!=len(uv0) or len(normals)!=len(uv0) or len(texcoords)!=len(uv0):
+        raise ValueError(f"India mesh/UV vertex counts differ: {obj_path.name}")
     usable=[group for group in groups if group]
     if sub_mesh_count>0:
         if first_sub_mesh<0 or first_sub_mesh+sub_mesh_count>len(usable):
@@ -123,79 +129,81 @@ def bake_india_lightmap(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path
         selected=usable[first_sub_mesh:first_sub_mesh+sub_mesh_count]
     else:
         selected=usable
-    faces=np.asarray([face for group in selected for face in group],dtype=np.int32)
-    if len(faces)==0 or int(faces.max())>=len(uv0):
-        raise ValueError(f"No valid India lightmap triangles: {obj_path.name}")
+    if not selected or any(not group for group in selected):
+        raise ValueError(f"No India render submeshes selected: {obj_path.name}")
 
-    with Image.open(atlas_path) as atlas:
-        width,height=atlas.size
     with Image.open(lightmap_path) as lm_image:
-        if lm_image.size!=(width,height):
-            raise ValueError("India atlas and lightmap dimensions differ")
         lightmap=np.asarray(lm_image.convert("RGB"),dtype=np.float32)/255.0
-
-    map_x=np.zeros((height,width),dtype=np.float32)
-    map_y=np.zeros((height,width),dtype=np.float32)
-    mask=np.zeros((height,width),dtype=np.uint8)
-    conflicts=0
-    for triangle in faces:
-        ia,ib,ic=map(int,triangle)
-        x0=uv0[ia,0]*(width-1); y0=(1.0-uv0[ia,1])*(height-1)
-        x1=uv0[ib,0]*(width-1); y1=(1.0-uv0[ib,1])*(height-1)
-        x2=uv0[ic,0]*(width-1); y2=(1.0-uv0[ic,1])*(height-1)
-        min_x=max(0,int(np.floor(min(x0,x1,x2))))
-        max_x=min(width-1,int(np.ceil(max(x0,x1,x2))))
-        min_y=max(0,int(np.floor(min(y0,y1,y2))))
-        max_y=min(height-1,int(np.ceil(max(y0,y1,y2))))
-        denominator=(y1-y2)*(x0-x2)+(x2-x1)*(y0-y2)
-        if abs(denominator)<1e-8: continue
-        gx=np.arange(min_x,max_x+1,dtype=np.float32)[None,:]
-        gy=np.arange(min_y,max_y+1,dtype=np.float32)[:,None]
-        wa=((y1-y2)*(gx-x2)+(x2-x1)*(gy-y2))/denominator
-        wb=((y2-y0)*(gx-x2)+(x0-x2)*(gy-y2))/denominator
-        wc=1.0-wa-wb
-        inside=(wa>=-1e-5)&(wb>=-1e-5)&(wc>=-1e-5)
-        if not np.any(inside): continue
-        lu=wa*uv1[ia,0]+wb*uv1[ib,0]+wc*uv1[ic,0]
-        lv=1.0-(wa*uv1[ia,1]+wb*uv1[ib,1]+wc*uv1[ic,1])
-        sy=slice(min_y,max_y+1); sx=slice(min_x,max_x+1)
-        local_mask=mask[sy,sx]
-        local_x=map_x[sy,sx]; local_y=map_y[sy,sx]
-        overlap=inside&(local_mask>0)
-        if np.any(overlap):
-            conflicts+=int(np.count_nonzero(overlap&((np.abs(local_x-lu)>0.002)|(np.abs(local_y-lv)>0.002))))
-        write=inside&(local_mask==0)
-        local_x[write]=lu[write]
-        local_y[write]=lv[write]
-        local_mask[write]=1
-    ys,xs=np.nonzero(mask)
-    if len(xs)==0: raise ValueError(f"India lightmap UV raster is empty: {obj_path.name}")
-    if conflicts>max(64,int(len(xs)*0.001)):
-        raise ValueError(f"India lightmap UV overlap conflict ({conflicts} pixels): {obj_path.name}")
-
-    px=np.clip(map_x[ys,xs]*(width-1),0,width-1)
-    py=np.clip(map_y[ys,xs]*(height-1),0,height-1)
+    height,width=lightmap.shape[:2]
+    px=np.clip(uv1[:,0]*(width-1),0,width-1)
+    py=np.clip((1.0-uv1[:,1])*(height-1),0,height-1)
     x0=np.floor(px).astype(np.int32); y0=np.floor(py).astype(np.int32)
     x1=np.minimum(x0+1,width-1); y1=np.minimum(y0+1,height-1)
     fx=(px-x0)[:,None]; fy=(py-y0)[:,None]
     c00=lightmap[y0,x0]; c10=lightmap[y0,x1]
     c01=lightmap[y1,x0]; c11=lightmap[y1,x1]
-    sampled=(c00*(1-fx)*(1-fy)+c10*fx*(1-fy)+c01*(1-fx)*fy+c11*fx*fy)
+    sampled=c00*(1-fx)*(1-fy)+c10*fx*(1-fy)+c01*(1-fx)*fy+c11*fx*fy
+    # Unity full-HDR lightmap decode is RGB * 2. Vertex colors preserve the
+    # shadowing while clamping to the representable 0..1 color range.
+    colors=np.clip(sampled*2.0,0.0,1.0)
+    colors=np.concatenate((colors,np.ones((len(colors),1),dtype=np.float32)),axis=1)
 
-    with Image.open(atlas_path) as atlas:
-        base=np.asarray(atlas.convert("RGBA"),dtype=np.float32)/255.0
-    albedo=base[ys,xs,:3]
-    albedo_linear=np.where(albedo<=0.04045,albedo/12.92,((albedo+0.055)/1.055)**2.4)
-    # Unity's full-HDR lightmap decode multiplies the stored RGB by two.
-    lit=np.clip(sampled*2.0,0.0,2.0)
-    result_linear=np.clip(albedo_linear*lit,0.0,1.0)
-    result_srgb=np.where(result_linear<=0.0031308,result_linear*12.92,
-                         1.055*np.power(result_linear,1.0/2.4)-0.055)
-    base[ys,xs,:3]=result_srgb
-    Image.fromarray(np.uint8(np.clip(base*255.0,0,255)),"RGBA").save(output_path,optimize=True)
-    coverage=len(xs)/(width*height)
-    print(f"INDIA_LIGHTMAP_BAKE_OK mesh={obj_path.name} triangles={len(faces)} coverage={coverage:.4%} conflicts={conflicts} output={output_path.name}")
-    return output_path.name
+    used=sorted({int(index) for group in selected for face in group for index in face})
+    remap={old:new for new,old in enumerate(used)}
+    pos=np.asarray(positions,dtype=np.float32)[used]
+    nrm=np.asarray(normals,dtype=np.float32)[used]
+    tex=np.asarray(texcoords,dtype=np.float32)[used]
+    col=colors[used]
+    if not np.isfinite(pos).all() or not np.isfinite(nrm).all() or not np.isfinite(tex).all() or not np.isfinite(col).all():
+        raise ValueError(f"Non-finite India mesh data: {obj_path.name}")
+
+    binary=bytearray(); views=[]; accessors=[]
+    def add_view(raw,target):
+        while len(binary)%4: binary.append(0)
+        offset=len(binary); binary.extend(raw)
+        view={"buffer":0,"byteOffset":offset,"byteLength":len(raw)}
+        if target is not None: view["target"]=target
+        views.append(view); return len(views)-1
+    def add_accessor(view,component_type,count,kind,minimum=None,maximum=None,normalized=False):
+        item={"bufferView":view,"componentType":component_type,"count":count,"type":kind}
+        if minimum is not None: item["min"]=minimum
+        if maximum is not None: item["max"]=maximum
+        if normalized: item["normalized"]=True
+        accessors.append(item); return len(accessors)-1
+
+    pos_view=add_view(pos.astype("<f4").tobytes(),34962)
+    pos_acc=add_accessor(pos_view,5126,len(pos),"VEC3",pos.min(axis=0).tolist(),pos.max(axis=0).tolist())
+    nrm_view=add_view(nrm.astype("<f4").tobytes(),34962)
+    nrm_acc=add_accessor(nrm_view,5126,len(nrm),"VEC3")
+    tex_view=add_view(tex.astype("<f4").tobytes(),34962)
+    tex_acc=add_accessor(tex_view,5126,len(tex),"VEC2")
+    col_view=add_view(col.astype("<f4").tobytes(),34962)
+    col_acc=add_accessor(col_view,5126,len(col),"VEC4")
+    primitives=[]
+    triangle_count=0
+    for group in selected:
+        indices=np.asarray([remap[int(index)] for face in group for index in face],dtype=np.uint32)
+        if len(indices)==0: continue
+        index_view=add_view(indices.astype("<u4").tobytes(),34963)
+        index_acc=add_accessor(index_view,5125,len(indices),"SCALAR",int(indices.min()),int(indices.max()))
+        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"mode":4})
+        triangle_count+=len(indices)//3
+    if not primitives: raise ValueError(f"No India GLB primitives generated: {obj_path.name}")
+
+    gltf={"asset":{"version":"2.0","generator":"BlockGun India offline lightmap baker"},
+          "scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
+          "meshes":[{"primitives":primitives}],
+          "buffers":[{"byteLength":len(binary)}],"bufferViews":views,"accessors":accessors}
+    json_chunk=json.dumps(gltf,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    while len(json_chunk)%4: json_chunk+=b" "
+    while len(binary)%4: binary.append(0)
+    total=12+8+len(json_chunk)+8+len(binary)
+    with output_path.open("wb") as out:
+        out.write(struct.pack("<4sII",b"glTF",2,total))
+        out.write(struct.pack("<I4s",len(json_chunk),b"JSON")); out.write(json_chunk)
+        out.write(struct.pack("<I4s",len(binary),b"BIN\x00")); out.write(binary)
+    print(f"INDIA_LIGHTMAP_GLB_OK mesh={obj_path.name} vertices={len(used)} triangles={triangle_count} primitives={len(primitives)} lightmap={lightmap_path.name} output={output_path.name}")
+    return {"file":output_path.name,"vertices":len(used),"triangles":triangle_count,"primitives":len(primitives)}
 
 
 def main():
@@ -284,38 +292,28 @@ def main():
                     0:"sharedassets7.assets__3__lvl_gameplay_india_LM0_final.png",
                     1:"sharedassets7.assets__4__lvl_gameplay_india_LMA1_final.png"
                 }
-                atlas_name="india_detail_sharedassets1.assets__65__t_atlas_environment.png"
-                atlas_path=textures/atlas_name
                 lightmap_path=ROOT/"exported_textures"/lm_names.get(lm_index,"")
                 uv_name=pathlib.Path(meshpath).stem+".uv.json"
                 uv_path=ROOT/"uv_channels"/uv_name
                 source_obj=ROOT/meshpath
-                if lm_index not in lm_names or not atlas_path.exists() or not lightmap_path.exists() or not uv_path.exists() or not source_obj.exists():
+                if lm_index not in lm_names or not lightmap_path.exists() or not uv_path.exists() or not source_obj.exists():
                     raise SystemExit(f"India lightmap inputs missing for {n.get('name')}: index={lm_index}, mesh={meshpath}")
                 first=int((batch or {}).get("first_sub_mesh") or 0)
                 count=int((batch or {}).get("sub_mesh_count") or 0)
                 tid=str(n.get("transform_path_id",n.get("name","node")))
-                baked_name=f"india_lightmapped_{tid}.png"
-                baked_path=textures/baked_name
-                if not baked_path.exists():
-                    bake_india_lightmap(source_obj,uv_path,lightmap_path,atlas_path,baked_path,first,count)
-                assigned=False
-                for material in mats:
-                    for texture in material.get("textures",[]):
-                        current_name=pathlib.Path(str(texture.get("exported_png",""))).name
-                        if current_name.startswith("india_detail_") or current_name=="sharedassets1.assets__65__t_atlas_environment.png":
-                            texture["exported_png"]=baked_name
-                            assigned=True
-                if not assigned:
-                    raise SystemExit(f"India lightmap bake has no matching atlas material: {n.get('name')}")
-                india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,"texture":baked_name})
-                tex.add(baked_name)
+                glb_name=f"india_lightmapped_{tid}.glb"
+                glb_path=meshes/glb_name
+                result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count)
+                n["godot_render_obj"]=glb_name
+                n["godot_lightmap_vertex_colors"]=True
+                all_meshes.add(glb_name); copied.add(glb_name)
+                india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,**result})
             n["godot_materials"]=mats
             # Mirror the exact per-axis correction applied to CollisionShape3D
             # so geometry-based stair probes use the same world dimensions.
             render_name=n.get("godot_render_obj","")
             collider_name=n.get("godot_collider_obj","")
-            visual_size=obj_size(meshes/render_name) if render_name else [0.0,0.0,0.0]
+            visual_size=obj_size(meshes/render_name) if render_name and not render_name.endswith(".glb") else obj_size(ROOT/meshpath) if meshpath else [0.0,0.0,0.0]
             collider_size=obj_size(meshes/collider_name) if collider_name else [0.0,0.0,0.0]
             node_scale=n.get("scale") or {}
             effective_collider_size=[collider_size[i]*abs(float(node_scale.get(key,1.0) or 1.0)) for i,key in enumerate(("x","y","z"))]
@@ -647,7 +645,15 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
         renderpath=colpath
     var render_mesh:Mesh=null
     if renderpath!="":
-        render_mesh=load("res://assets/meshes/"+renderpath.get_file()) as Mesh
+        var mesh_resource=load("res://assets/meshes/"+renderpath.get_file())
+        if mesh_resource is Mesh:
+            render_mesh=mesh_resource as Mesh
+        elif mesh_resource is PackedScene:
+            var imported_scene=(mesh_resource as PackedScene).instantiate()
+            var imported_instance=imported_scene.find_child("*","MeshInstance3D",true,false) as MeshInstance3D
+            if imported_instance:
+                render_mesh=imported_instance.mesh
+            imported_scene.free()
         if render_mesh:
             var mi=MeshInstance3D.new()
             mi.mesh=render_mesh
@@ -658,6 +664,8 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
                     var material_index=min(surface_index,mats.size()-1)
                     var surface_material=_mat([mats[material_index]],String(d.get("name","")))
                     if surface_material:
+                        if bool(d.get("godot_lightmap_vertex_colors",false)) and surface_material is StandardMaterial3D:
+                            (surface_material as StandardMaterial3D).vertex_color_use_as_albedo=true
                         mi.set_surface_override_material(surface_index,surface_material)
     # Only use recovered Unity MeshCollider data, not every visible render mesh.
     # Treating trees, water, roofs and static-batched scenery as solid walls was
