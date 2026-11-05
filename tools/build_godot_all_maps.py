@@ -129,10 +129,12 @@ def main():
             collider_name=n.get("godot_collider_obj","")
             visual_size=obj_size(meshes/render_name) if render_name else [0.0,0.0,0.0]
             collider_size=obj_size(meshes/collider_name) if collider_name else [0.0,0.0,0.0]
+            node_scale=n.get("scale") or {}
+            effective_collider_size=[collider_size[i]*abs(float(node_scale.get(key,1.0) or 1.0)) for i,key in enumerate(("x","y","z"))]
             correction=[1.0,1.0,1.0]
             for axis in range(3):
-                if visual_size[axis]>0.02 and collider_size[axis]>visual_size[axis]*4.0:
-                    correction[axis]=visual_size[axis]/collider_size[axis]
+                if visual_size[axis]>0.02 and effective_collider_size[axis]>visual_size[axis]*4.0:
+                    correction[axis]=visual_size[axis]/effective_collider_size[axis]
             n["godot_collider_correction"]={"x":correction[0],"y":correction[1],"z":correction[2]}
             # Unity static-batched OBJ vertices are already in scene/world space.
             # Their visuals and matching colliders are attached to the map root
@@ -500,10 +502,12 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
         if render_mesh:
             var visual_size=render_mesh.get_aabb().size
             var collider_size=collision_mesh.get_aabb().size
+            var node_scale=Vector3(absf(n.scale.x),absf(n.scale.y),absf(n.scale.z))
+            var effective_collider_size=collider_size*node_scale
             var correction=Vector3.ONE
             for axis in range(3):
-                if visual_size[axis]>0.02 and collider_size[axis]>visual_size[axis]*4.0:
-                    correction[axis]=visual_size[axis]/collider_size[axis]
+                if visual_size[axis]>0.02 and effective_collider_size[axis]>visual_size[axis]*4.0:
+                    correction[axis]=visual_size[axis]/effective_collider_size[axis]
             cs.scale=correction
         body.add_child(cs)
         var collider_parent:Node3D=parent if static_batched_collision else n
