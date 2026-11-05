@@ -670,6 +670,7 @@ func _audit_all_maps():
             var route_delta=end_xz-start_xz
             if route_delta.length()<0.20:
                 continue
+            print("STAIR_PROBE_TARGET node=",route.get("node","?")," start=",start_xz," end=",end_xz)
             var stair_hit={}
             var probe_used=Vector2.ZERO
             var best_probe_distance=INF
