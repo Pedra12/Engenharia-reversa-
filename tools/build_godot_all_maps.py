@@ -702,14 +702,41 @@ func _audit_all_maps():
             if stair_hit.is_empty():
                 print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," hit=false predicted_start=",start_xz," predicted_end=",end_xz)
                 continue
-            # CharacterBody origin is at the feet; the capsule bottom is
-            # 0.025m above that origin. Place it almost exactly on the tread.
-            player.global_position=stair_hit.position-Vector3.UP*0.02
-            player.velocity=Vector3.ZERO
-            for frame in range(5):
-                await get_tree().physics_frame
+            # A valid ray hit does not guarantee enough room for the full
+            # capsule. Search nearby points and accept only a grounded spawn.
+            var grounded_at_start=false
+            var grounded_hit={}
+            var grounded_offset=Vector2.ZERO
+            var start_offsets=[Vector2.ZERO,Vector2(0.25,0),Vector2(-0.25,0),Vector2(0,0.25),Vector2(0,-0.25),Vector2(0.35,0.35),Vector2(-0.35,0.35),Vector2(0.35,-0.35),Vector2(-0.35,-0.35),Vector2(0.5,0),Vector2(-0.5,0),Vector2(0,0.5),Vector2(0,-0.5)]
+            var target_collider_name="RecoveredUnityCollider_"+String(route.get("node",""))
+            for offset in start_offsets:
+                var probe=start_xz+Vector3(offset.x,0.0,offset.y)
+                var probe_y=float(route_start[1])
+                var query=PhysicsRayQueryParameters3D.create(Vector3(probe.x,probe_y+2.5,probe.z),Vector3(probe.x,probe_y-2.5,probe.z))
+                query.collision_mask=1
+                query.hit_back_faces=true
+                query.exclude=[player.get_rid()]
+                for other_collider in world.find_children("*","StaticBody3D",true,false):
+                    if String(other_collider.name)!=target_collider_name:
+                        query.exclude.append(other_collider.get_rid())
+                var candidate=get_world_3d().direct_space_state.intersect_ray(query)
+                if candidate.is_empty() or candidate.normal.dot(Vector3.UP)<0.70:
+                    continue
+                player.global_position=candidate.position-Vector3.UP*0.025
+                player.velocity=Vector3.ZERO
+                for settle_frame in range(3):
+                    await get_tree().physics_frame
+                if player.is_on_floor():
+                    grounded_at_start=true
+                    grounded_hit=candidate
+                    grounded_offset=offset
+                    break
+            if not grounded_at_start:
+                print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," grounded_start=false no_capsule_safe_tread start=",start_xz)
+                continue
+            stair_hit=grounded_hit
+            probe_used=grounded_offset
             var stair_start_y=player.global_position.y
-            var grounded_at_start=player.is_on_floor()
             var saved_stair_yaw=walk_yaw
             var route_points:Array=route.get("waypoints",[])
             if route_points.size()<2:
