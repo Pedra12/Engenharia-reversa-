@@ -702,9 +702,11 @@ func _audit_all_maps():
             if stair_hit.is_empty():
                 print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," hit=false predicted_start=",start_xz," predicted_end=",end_xz)
                 continue
-            player.global_position=stair_hit.position+Vector3.UP*0.10
+            # CharacterBody origin is at the feet; the capsule bottom is
+            # 0.025m above that origin. Place it almost exactly on the tread.
+            player.global_position=stair_hit.position-Vector3.UP*0.02
             player.velocity=Vector3.ZERO
-            for frame in range(8):
+            for frame in range(5):
                 await get_tree().physics_frame
             var stair_start_y=player.global_position.y
             var grounded_at_start=player.is_on_floor()
