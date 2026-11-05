@@ -707,17 +707,29 @@ func _audit_all_maps():
             for frame in range(8):
                 await get_tree().physics_frame
             var stair_start_y=player.global_position.y
+            var grounded_at_start=player.is_on_floor()
             var saved_stair_yaw=walk_yaw
-            walk_yaw=atan2(-route_delta.normalized().x,-route_delta.normalized().z)
-            move_vector=Vector2(0,-1)
-            var route_frames=clampi(int(ceil(float(route.get("horizontal_distance",1.0))/4.5*60.0))+1,4,60)
-            for frame in range(route_frames):
-                await get_tree().physics_frame
+            var route_points:Array=route.get("waypoints",[])
+            if route_points.size()<2:
+                route_points=[route_start,route_end]
+            for waypoint_index in range(1,route_points.size()):
+                var waypoint=route_points[waypoint_index]
+                var segment=Vector3(float(waypoint[0])-player.global_position.x,0.0,float(waypoint[2])-player.global_position.z)
+                if segment.length()<0.05:
+                    continue
+                walk_yaw=atan2(-segment.normalized().x,-segment.normalized().z)
+                move_vector=Vector2(0,-1)
+                var segment_frames=clampi(int(ceil(segment.length()/4.5*60.0))+1,3,30)
+                for frame in range(segment_frames):
+                    await get_tree().physics_frame
+                move_vector=Vector2.ZERO
+                for frame in range(2):
+                    await get_tree().physics_frame
             move_vector=Vector2.ZERO
             walk_yaw=saved_stair_yaw
             var climb_height=player.global_position.y-stair_start_y
-            var passed=climb_height>=minf(0.25,float(route.get("rise",0.5))*0.45) and player.is_on_floor()
-            print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," grounded=",player.is_on_floor()," start=",stair_start_y," hit=",stair_hit.position," probe_offset=",probe_used," route_delta=",route_delta," end=",player.global_position," climb_height=",climb_height," expected_rise=",route.get("rise",0.0)," passed=",passed)
+            var passed=grounded_at_start and climb_height>=minf(0.25,float(route.get("rise",0.5))*0.45) and player.is_on_floor()
+            print("STAIR_ROUTE_AUDIT map=",MAPS[index]," node=",route.get("node","?")," grounded_start=",grounded_at_start," grounded_end=",player.is_on_floor()," start=",stair_start_y," hit=",stair_hit.position," normal=",stair_hit.normal," probe_offset=",probe_used," route_delta=",route_delta," end=",player.global_position," climb_height=",climb_height," expected_rise=",route.get("rise",0.0)," passed=",passed)
             if passed:
                 passed_stairs+=1
         print("STAIR_MAP_AUDIT map=",MAPS[index]," tested=",tested_stairs," passed=",passed_stairs)
