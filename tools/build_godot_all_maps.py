@@ -258,6 +258,9 @@ def main():
                                     all_textures.add(dst.name)
                                 if india_atlas:
                                     texture["exported_png"]=output_name
+                                # Record the exact Godot resource path derived from
+                                # this Unity Material's serialized Texture2D reference.
+                                texture["godot_texture_path"]="res://assets/textures/"+output_name
                                 tex.add(dst.name)
                             else: missing.append(png)
             def copy_mesh(obj,kind):
