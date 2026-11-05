@@ -528,22 +528,14 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
         body.add_child(cs)
         var collider_parent:Node3D=parent if collision_world_space else n
         collider_parent.add_child(body)
-        if not collision_world_space:
-            # UnityPy exports local MeshCollider vertices in the original local
-            # basis, while Unity static-batch render vertices are already in
-            # scene space with the X translation reflected for Godot's basis.
-            # Mirror the node translation only (not the mesh vertices) so the
-            # original collision surface lines up with its recovered renderer.
-            # Static-batch OBJ vertices are already in reflected world X.
-            # The collider mesh is local to the Unity GameObject, so its
-            # translated origin must be mirrored in world space. Convert that
-            # world-space offset back through the node's local X scale; without
-            # this division, 0.01-scaled house/Deluxe/India colliders remain on
-            # the wrong side of the map and create invisible walls/floors.
+        if not collision_world_space and bool(d.get("godot_static_batched",false)):
+            # A static-batched visual is already in reflected world X, while
+            # its separate Unity MeshCollider is still local to the object.
+            # Mirror the node origin only for this case. Non-static-batched
+            # visuals and colliders share the same local transform and need no
+            # offset at all.
             if absf(n.scale.x)>0.0001:
                 body.position.x=(-2.0*n.position.x)/n.scale.x
-            else:
-                body.position.x=0.0
     for ch in d.get("children",[]):
         _build_node(ch,n,map_id)
 func _ref(c:Dictionary,key:String)->String:
