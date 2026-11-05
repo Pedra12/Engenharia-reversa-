@@ -191,10 +191,11 @@ def main():
        count=int((batch or {}).get("sub_mesh_count") or 0)
        visual_size=obj_size(render_obj,first,count) if render_obj else [0.0,0.0,0.0]
        collider_size=obj_size(obj)
+       effective_collider_size=[collider_size[i]*abs(float((scale or {}).get(key,1.0) or 1.0)) for i,key in enumerate(("x","y","z"))]
        correction={"x":1.0,"y":1.0,"z":1.0}
        for axis,key in enumerate(("x","y","z")):
-        if visual_size[axis]>0.02 and collider_size[axis]>visual_size[axis]*4.0:
-         correction[key]=visual_size[axis]/collider_size[axis]
+        if visual_size[axis]>0.02 and effective_collider_size[axis]>visual_size[axis]*4.0:
+         correction[key]=visual_size[axis]/effective_collider_size[axis]
        scale_y=float(scale.get("y",1.0) or 1.0)*float(correction.get("y",1.0) or 1.0)
        colliders.append({"node":name,"mesh":obj,"scale_y":scale_y,"scale":scale,"correction":correction,"position":n.get("position") or {},"stats":obj_stats(obj),"surface_features":obj_surface_features(obj,scale_y)})
       if not (GRAPH/obj).exists(): missing.append(obj)
