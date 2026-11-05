@@ -20,6 +20,7 @@ FIELDS = {
  "Animator": ("m_GameObject","m_Avatar","m_Controller"),
  "Animation": ("m_GameObject","m_Animations"),
  "Material": ("m_Shader",),
+ "LightmapSettings": ("m_Lightmaps",),
  "MonoBehaviour": ("m_GameObject","m_Script"),
  "Rigidbody": ("m_GameObject",), "Light": ("m_GameObject",), "Camera": ("m_GameObject",)
 }
@@ -47,7 +48,7 @@ def refs(v):
  elif isinstance(v,dict):
   for x in v.values(): out.extend(refs(x))
  else:
-  for k in ("component","m_Component","first","second","m_Texture","texture"):
+  for k in ("component","m_Component","first","second","m_Texture","texture","lightmapColor","lightmapDir","shadowMask","m_Lightmaps"):
    try: x=getattr(v,k,None)
    except Exception: x=None
    if x is not None: out.extend(refs(x))
@@ -166,6 +167,9 @@ def main():
                     "m_LightProbeUsage","m_ScaleInLightmap","m_StitchSeams"):
        value=attr(d,field)
        if value is not None: r[field]=val(value)
+     if t=="LightmapSettings":
+      r["lightmap_mode"]=val(attr(d,"m_LightmapsMode"))
+      r["lightmaps_count"]=len(attr(d,"m_Lightmaps") or [])
      if t=="Mesh":
       r["uv_channels"]=uv_summary
       if (src,pid) in uv_channel_exports: r["uv_channel_export"]=uv_channel_exports[(src,pid)]
@@ -222,6 +226,10 @@ def main():
      if not c: return {"path_id":int(cid),"type":"UNKNOWN"}
      info={"path_id":int(cid),"type":c["type"],"name":c["name"],"references":[]}
      if c.get("static_batch_info") is not None: info["static_batch_info"]=c["static_batch_info"]
+     for field in ("m_LightmapIndex","m_LightmapST","m_LightmapScaleOffset",
+                   "m_ReceiveGI","m_ReceiveShadows","m_ReflectionProbeUsage",
+                   "m_LightProbeUsage","m_ScaleInLightmap","m_StitchSeams"):
+      if field in c: info[field]=c[field]
      for ref in c.get("refs",[]):
       target_source=ref.get("target_source") or level
       entry={"field":ref["field"],"target_source":target_source,"target_path_id":ref["path_id"]}
