@@ -1093,11 +1093,6 @@ func _lighting():
     var sun=DirectionalLight3D.new()
     sun.rotation_degrees=Vector3(-52,-32,0)
     sun.light_energy=1.1
-    # Preserve the existing neutral daylight, but enable real directional
-    # shadows so buildings and terrain have depth instead of flat illumination.
-    sun.shadow_enabled=true
-    sun.directional_shadow_max_distance=180.0
-    sun.shadow_bias=0.04
     add_child(sun)
 '''
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
