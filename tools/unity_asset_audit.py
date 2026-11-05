@@ -6,7 +6,7 @@ ARCHIVE=pathlib.Path("blockgun.zip")
 OUT=pathlib.Path("unity_audit"); OUT.mkdir(exist_ok=True)
 EXPORT=OUT/"exported"; EXPORT.mkdir(exist_ok=True)
 rows=[]; errors=[]; counts=collections.Counter(); previews=[]
-skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; library_rows=[]
+skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; material_records=[]; library_rows=[]
 DATA_PREFIX="resources/assets/bin/Data/"
 
 def safe(s):
@@ -129,6 +129,7 @@ def main():
                             "m_InvalidKeywords","m_LightmapFlags","m_Flags"
                         ])
                         row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]
+                        material_records.append({"source":source,"path_id":str(pid),"name":str(name),"serialized":material_fields})
                         try:
                             shader=getattr(data,"m_Shader",None)
                             row["shader_path_id"]=str(getattr(shader,"path_id","") or "")
@@ -193,7 +194,7 @@ def main():
                 continue
             blob=source_zip.read(n); save(dest,blob)
             library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
-    (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
+    (OUT/"UNITY_MATERIAL_PROPERTIES.json").write_text(json.dumps(material_records,ensure_ascii=False,indent=2),encoding="utf-8")\n    (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATOR_DATA.json").write_text(json.dumps({"controllers":controller_records,"avatars":avatar_records},ensure_ascii=False,indent=2),encoding="utf-8")
     with open(OUT/"GAMEPLAY_ASSET_LIBRARY.csv","w",newline="",encoding="utf-8") as f:
