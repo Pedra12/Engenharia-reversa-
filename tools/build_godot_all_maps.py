@@ -85,7 +85,7 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         import subprocess, sys
         subprocess.check_call([sys.executable,"-m","pip","install","--disable-pip-version-check","numpy"])
         import numpy as np
-    import struct
+    import struct, io
 
     uv_data=json.loads(uv_path.read_text(encoding="utf-8"))
     uv0=np.asarray(uv_data.get("m_UV0",[]),dtype=np.float32)
@@ -190,10 +190,15 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         triangle_count+=len(indices)//3
     if not primitives: raise ValueError(f"No India GLB primitives generated: {obj_path.name}")
 
+    white=io.BytesIO()
+    Image.new("RGBA",(1,1),(255,255,255,255)).save(white,format="PNG")
+    white_view=add_view(white.getvalue(),None)
     gltf={"asset":{"version":"2.0","generator":"BlockGun India offline lightmap baker"},
           "scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
           "meshes":[{"primitives":primitives}],
-          "materials":[{"name":"India baked lightmap vertex colors","pbrMetallicRoughness":{"baseColorFactor":[1.0,1.0,1.0,1.0],"metallicFactor":0.0,"roughnessFactor":1.0}}],
+          "images":[{"bufferView":white_view,"mimeType":"image/png"}],
+          "textures":[{"source":0}],
+          "materials":[{"name":"India baked lightmap vertex colors","pbrMetallicRoughness":{"baseColorFactor":[1.0,1.0,1.0,1.0],"baseColorTexture":{"index":0},"metallicFactor":0.0,"roughnessFactor":1.0}}],
           "buffers":[{"byteLength":len(binary)}],"bufferViews":views,"accessors":accessors}
     json_chunk=json.dumps(gltf,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     while len(json_chunk)%4: json_chunk+=b" "
