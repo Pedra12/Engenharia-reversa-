@@ -162,7 +162,7 @@ def main():
       r["static_batch_info"]=static_batch_info(d)
       # Preserve Unity's baked-lighting metadata so lightmaps can be mapped
       # to the correct static-batched submesh instead of guessed by filename.
-      for field in ("m_LightmapIndex","m_LightmapST","m_LightmapScaleOffset",
+      for field in ("m_LightmapIndex","m_LightmapST","m_LightmapScaleOffset","m_LightmapTilingOffset",
                     "m_ReceiveGI","m_ReceiveShadows","m_ReflectionProbeUsage",
                     "m_LightProbeUsage","m_ScaleInLightmap","m_StitchSeams"):
        value=attr(d,field)
@@ -226,7 +226,7 @@ def main():
      if not c: return {"path_id":int(cid),"type":"UNKNOWN"}
      info={"path_id":int(cid),"type":c["type"],"name":c["name"],"references":[]}
      if c.get("static_batch_info") is not None: info["static_batch_info"]=c["static_batch_info"]
-     for field in ("m_LightmapIndex","m_LightmapST","m_LightmapScaleOffset",
+     for field in ("m_LightmapIndex","m_LightmapST","m_LightmapScaleOffset","m_LightmapTilingOffset",
                    "m_ReceiveGI","m_ReceiveShadows","m_ReflectionProbeUsage",
                    "m_LightProbeUsage","m_ScaleInLightmap","m_StitchSeams"):
       if field in c: info[field]=c[field]
