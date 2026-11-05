@@ -454,10 +454,11 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     n.position=_v(d.get("position",{}),Vector3.ZERO)
     # Unity's static-batched meshes are exported in world space with X already
     # reflected for Godot. Non-static meshes still use their original local
-    # transforms, so mirror only their X origin in Rome and Forest. These
-    # map-scoped corrections align their buildings/ground with the static
-    # geometry without touching any other map.
-    if (map_id=="lvl_rome" or map_id=="lvl_forest") and not bool(d.get("godot_static_batched",false)):
+    # transforms. Apply the X-origin reflection only to maps where the recovered
+    # scene contains a non-static mesh that must align with its static geometry:
+    # Rome, Forest and India. The other recovered maps are fully static-batched
+    # and must keep their original node transforms.
+    if (map_id=="lvl_rome" or map_id=="lvl_forest" or map_id=="lvl_india") and not bool(d.get("godot_static_batched",false)):
         n.position.x=-n.position.x
     n.scale=_v(d.get("scale",{}),Vector3.ONE)
     var q=d.get("rotation",{})
