@@ -162,7 +162,8 @@ def stair_route_candidates(mesh_path,scale,position,node_name,correction=None):
  distance=((end[0]-start[0])**2+(end[2]-start[2])**2)**0.5
  rise=end[1]-start[1]
  if not (0.18<=distance<=2.0 and 0.15<=rise<=1.6): return []
- return [{"node":node_name,"steps":len(best_path),"start":start,"end":end,"horizontal_distance":distance,"rise":rise}]
+ waypoints=[[nodes[i][1][0]-px,nodes[i][0]+py,nodes[i][1][1]+pz] for i in best_path]
+ return [{"node":node_name,"steps":len(best_path),"start":start,"end":end,"waypoints":waypoints,"horizontal_distance":distance,"rise":rise}]
 
 def main():
  reports=[]; global_missing=0
