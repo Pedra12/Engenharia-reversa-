@@ -131,7 +131,7 @@ def main():
        # Unity stores modern mesh UVs in interleaved VertexData streams. MeshHandler
        # decodes those streams (and compressed meshes) before OBJ export.
        uv_payload={}
-       if str(name).startswith("umsh_india_"):
+       if str(name).startswith("umsh_india_") or (str(src)=="level7" and int(pid)==1):
         handler=MeshHandler(d)
         handler.process()
         for channel in range(8):
