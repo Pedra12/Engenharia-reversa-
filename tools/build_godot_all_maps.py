@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate a Godot 4 project with all recovered Block Gun maps."""
 import json, pathlib, shutil, re
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops, ImageEnhance, ImageOps
 ROOT=pathlib.Path("scene_graph"); PROJECT=pathlib.Path("godot_project")
 MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
 names={"lvl_baghdad":"Baghdad","lvl_assault":"Assalto","lvl_middle_east":"Oriente Médio","lvl_resort":"Resort","lvl_forest":"Floresta","lvl_house":"Casa","lvl_india":"Índia","lvl_rome":"Roma","lvl_deluxe_fest":"Festival Deluxe"}
@@ -56,6 +56,26 @@ def obj_size(path:pathlib.Path):
         return [0.0,0.0,0.0]
     return [maxs[i]-mins[i] for i in range(3)]
 
+def enhance_india_atlas(source:pathlib.Path,destination:pathlib.Path):
+    """Bake subtle surface variation into an India-only atlas copy (no runtime shader)."""
+    with Image.open(source) as opened:
+        image=opened.convert("RGBA")
+    rgb=image.convert("RGB")
+    channels=rgb.split()
+    hi=ImageChops.lighter(ImageChops.lighter(channels[0],channels[1]),channels[2])
+    lo=ImageChops.darker(ImageChops.darker(channels[0],channels[1]),channels[2])
+    saturation=ImageChops.difference(hi,lo)
+    # Restrict baked contrast/grain to low-saturation concrete, stone and plaster.
+    neutral_mask=ImageOps.invert(saturation).point(lambda value: max(0,min(255,(value-18)*2)))
+    contrasted=ImageEnhance.Contrast(rgb).enhance(1.055)
+    noise=Image.effect_noise(rgb.size,22).convert("L")
+    grain=ImageOps.colorize(noise,(112,105,94),(151,143,128)).convert("RGB")
+    detailed=Image.blend(contrasted,grain,0.035)
+    baked=Image.composite(detailed,rgb,neutral_mask)
+    result=Image.merge("RGBA",(*baked.split(),image.getchannel("A")))
+    result.save(destination,optimize=True)
+
+
 def main():
     data_dir=PROJECT/"data"; meshes=PROJECT/"assets"/"meshes"; textures=PROJECT/"assets"/"textures"
     for p in (data_dir,meshes,textures): p.mkdir(parents=True,exist_ok=True)
@@ -88,9 +108,18 @@ def main():
                     for texture in material.get("textures",[]):
                         png=texture.get("exported_png")
                         if png:
-                            src=ROOT/png; dst=textures/pathlib.Path(png).name
+                            src=ROOT/png
+                            original_name=pathlib.Path(png).name
+                            india_atlas=(mapid=="lvl_india" and original_name=="sharedassets1.assets__65__t_atlas_environment.png")
+                            output_name=("india_detail_"+original_name) if india_atlas else original_name
+                            dst=textures/output_name
                             if src.exists():
-                                if dst.name not in all_textures: shutil.copy2(src,dst); all_textures.add(dst.name)
+                                if dst.name not in all_textures:
+                                    if india_atlas: enhance_india_atlas(src,dst)
+                                    else: shutil.copy2(src,dst)
+                                    all_textures.add(dst.name)
+                                if india_atlas:
+                                    texture["exported_png"]=output_name
                                 tex.add(dst.name)
                             else: missing.append(png)
             def copy_mesh(obj,kind):
@@ -468,7 +497,7 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
             for surface_index in range(mi.mesh.get_surface_count()):
                 if mats.size()>0:
                     var material_index=min(surface_index,mats.size()-1)
-                    var surface_material=_mat([mats[material_index]],String(d.get("name","")),map_id=="lvl_india")
+                    var surface_material=_mat([mats[material_index]],String(d.get("name","")))
                     if surface_material:
                         mi.set_surface_override_material(surface_index,surface_material)
     # Only use recovered Unity MeshCollider data, not every visible render mesh.
@@ -577,77 +606,7 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
         sm.albedo_color=Color(0.28,0.58,0.72,0.58)
         sm.roughness=0.16
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
-    # India-only material finish. Preserve the recovered atlas exactly as the
-    # color source, then add world-space layered wear, dust and roughness detail.
-    # World-space noise works with the recovered single-UV OBJ meshes; the
-    # original Unity lightmaps are deliberately NOT sampled because these OBJ
-    # exports do not contain a verified second/lightmap UV channel.
-    if india_detail and sm.albedo_texture and not material_name.contains("alpha") and not object_lower.contains("alpha"):
-        var detail_shader=Shader.new()
-        detail_shader.code = """
-shader_type spatial;
-uniform sampler2D base_texture : source_color, filter_linear_mipmap;
-varying vec3 india_world_pos;
-varying vec3 india_world_normal;
-float india_hash(vec3 p) {
-    p = fract(p * 0.1031);
-    p += dot(p, p.yzx + 33.33);
-    return fract((p.x + p.y) * p.z);
-}
-float india_noise(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float n000 = india_hash(i + vec3(0.0, 0.0, 0.0));
-    float n100 = india_hash(i + vec3(1.0, 0.0, 0.0));
-    float n010 = india_hash(i + vec3(0.0, 1.0, 0.0));
-    float n110 = india_hash(i + vec3(1.0, 1.0, 0.0));
-    float n001 = india_hash(i + vec3(0.0, 0.0, 1.0));
-    float n101 = india_hash(i + vec3(1.0, 0.0, 1.0));
-    float n011 = india_hash(i + vec3(0.0, 1.0, 1.0));
-    float n111 = india_hash(i + vec3(1.0, 1.0, 1.0));
-    float x00 = mix(n000, n100, f.x);
-    float x10 = mix(n010, n110, f.x);
-    float x01 = mix(n001, n101, f.x);
-    float x11 = mix(n011, n111, f.x);
-    return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
-}
-void vertex() {
-    india_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-    india_world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
-}
-void fragment() {
-    vec4 base = texture(base_texture, UV);
-    float hi = max(max(base.r, base.g), base.b);
-    float lo = min(min(base.r, base.g), base.b);
-    float saturation = hi - lo;
-    // Keep saturated signs, windows and painted props close to their source.
-    float neutral_surface = 1.0 - smoothstep(0.14, 0.48, saturation);
-    float detail_mask = mix(0.28, 1.0, neutral_surface);
-    float broad_wear = india_noise(india_world_pos * 0.42);
-    float surface_mottle = india_noise(india_world_pos * 2.8);
-    float fine_grain = india_noise(india_world_pos * 18.0);
-    float pores = india_noise(india_world_pos * 54.0);
-    float variation = (broad_wear - 0.5) * 0.16
-                    + (surface_mottle - 0.5) * 0.13
-                    + (fine_grain - 0.5) * 0.075
-                    + (pores - 0.5) * 0.035;
-    float horizontal = smoothstep(0.52, 0.94, abs(normalize(india_world_normal).y));
-    float dust_noise = india_noise(india_world_pos * 0.78 + vec3(13.7, 2.1, 7.4));
-    float dust = smoothstep(0.48, 0.82, dust_noise) * (0.025 + horizontal * 0.055);
-    vec3 worn = base.rgb * (1.0 + variation * detail_mask);
-    vec3 dust_tint = worn * vec3(1.09, 1.035, 0.94);
-    ALBEDO = max(mix(worn, dust_tint, dust * detail_mask), vec3(0.0));
-    ROUGHNESS = mix(0.72, 0.97, india_noise(india_world_pos * 4.2));
-    METALLIC = 0.0;
-    SPECULAR = 0.18;
-}
-"""
-        var detailed=ShaderMaterial.new()
-        detailed.shader=detail_shader
-        detailed.set_shader_parameter("base_texture",sm.albedo_texture)
-        print("INDIA_LAYERED_SURFACE_DETAIL_ACTIVE material=",material_name," object=",object_name)
-        return detailed
+    # All map materials use preprocessed textures; no procedural India shader at runtime.
     return sm
 func _create_camera():
     camera_pivot=Node3D.new()
