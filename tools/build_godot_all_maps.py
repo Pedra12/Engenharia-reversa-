@@ -486,6 +486,12 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     elif colpath!="":
         collision_mesh=load("res://assets/meshes/"+colpath.get_file()) as Mesh
     var object_name=String(d.get("name","")).to_lower()
+    # These two maps contain large, horizontal walkable background/ground meshes
+    # without Unity MeshCollider components. Enable collision ONLY for these
+    # explicitly audited map nodes; leave every other map and node unchanged.
+    if render_mesh and colpath=="" and ((map_id=="lvl_rome" and object_name=="umsh_rome_s5_background") or (map_id=="lvl_forest" and object_name=="sm_forest_s4_background")):
+        collision_mesh=render_mesh
+        print("MAP_SPECIFIC_GROUND_COLLIDER map=",map_id," node=",n.name," source=original_render_mesh")
     if collision_mesh==null and render_mesh and colpath=="":
         var excluded=["background","alpha","water","foliage","tree","roof"]
         var forbidden=false
