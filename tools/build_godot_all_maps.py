@@ -35,6 +35,27 @@ def slice_obj(source:pathlib.Path,destination:pathlib.Path,first:int,count:int):
     destination.write_text("\n".join(preamble+[line for group in chosen for line in group])+"\n",encoding="utf-8")
     return True
 
+def obj_size(path:pathlib.Path):
+    """Return OBJ dimensions without loading its faces into memory."""
+    mins=[float("inf"),float("inf"),float("inf")]
+    maxs=[float("-inf"),float("-inf"),float("-inf")]
+    try:
+        with path.open(errors="ignore") as src:
+            for line in src:
+                if line.startswith("v "):
+                    try:
+                        xyz=list(map(float,line.split()[1:4]))
+                        for axis,value in enumerate(xyz):
+                            mins[axis]=min(mins[axis],value)
+                            maxs[axis]=max(maxs[axis],value)
+                    except (ValueError,IndexError):
+                        pass
+    except OSError:
+        return [0.0,0.0,0.0]
+    if any(value==float("inf") for value in mins):
+        return [0.0,0.0,0.0]
+    return [maxs[i]-mins[i] for i in range(3)]
+
 def main():
     data_dir=PROJECT/"data"; meshes=PROJECT/"assets"/"meshes"; textures=PROJECT/"assets"/"textures"
     for p in (data_dir,meshes,textures): p.mkdir(parents=True,exist_ok=True)
@@ -102,6 +123,17 @@ def main():
                 n["godot_collider_obj"]=copy_mesh(colpath,"collider")
                 n["godot_static_batched_collider"]=False
             n["godot_materials"]=mats
+            # Mirror the exact per-axis correction applied to CollisionShape3D
+            # so geometry-based stair probes use the same world dimensions.
+            render_name=n.get("godot_render_obj","")
+            collider_name=n.get("godot_collider_obj","")
+            visual_size=obj_size(meshes/render_name) if render_name else [0.0,0.0,0.0]
+            collider_size=obj_size(meshes/collider_name) if collider_name else [0.0,0.0,0.0]
+            correction=[1.0,1.0,1.0]
+            for axis in range(3):
+                if visual_size[axis]>0.02 and collider_size[axis]>visual_size[axis]*4.0:
+                    correction[axis]=visual_size[axis]/collider_size[axis]
+            n["godot_collider_correction"]={"x":correction[0],"y":correction[1],"z":correction[2]}
             # Unity static-batched OBJ vertices are already in scene/world space.
             # Their visuals and matching colliders are attached to the map root
             # rather than applying the GameObject transform a second time.
