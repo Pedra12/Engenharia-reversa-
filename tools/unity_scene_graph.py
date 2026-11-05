@@ -74,6 +74,7 @@ def safe(s):
  return (re.sub(r"[^A-Za-z0-9._-]+","_",str(s or "unnamed")).strip("._") or "unnamed")[:100]
 def main():
  import UnityPy
+ from UnityPy.helpers.MeshHelper import MeshHandler
  OUT.mkdir(parents=True,exist_ok=True)
  with zipfile.ZipFile(ARCHIVE) as z:
   members=[n for n in z.namelist() if n.startswith(PREFIX) and not n.endswith("/")]
@@ -127,18 +128,19 @@ def main():
      uv_summary={}
      if t=="Mesh":
       try:
-       # Read original Unity UV streams before OBJ conversion discards secondary channels.
+       # Unity stores modern mesh UVs in interleaved VertexData streams. MeshHandler
+       # decodes those streams (and compressed meshes) before OBJ export.
        uv_payload={}
-       for channel in range(8):
-        raw_uv=attr(d,f"m_UV{channel}")
-        if raw_uv is None: continue
-        try:
+       if str(name).startswith("umsh_india_"):
+        handler=MeshHandler(d)
+        handler.process()
+        for channel in range(8):
+         raw_uv=getattr(handler,f"m_UV{channel}",None)
+         if raw_uv is None: continue
          uv_values=list(raw_uv)
-         uv_summary[str(channel)]={"count":len(uv_values),"sample":[val(x) for x in uv_values[:4]]}
-         if str(name).startswith("umsh_india_") and channel in (0,1):
-          uv_payload[f"m_UV{channel}"]=[val(x) for x in uv_values]
-        except Exception as uv_error:
-         uv_summary[str(channel)]={"error":str(uv_error)[:180],"type":type(raw_uv).__name__}
+         uv_summary[str(channel)]={"count":len(uv_values),"dimension":len(uv_values[0]) if uv_values else 0,"sample":[list(x) for x in uv_values[:4]]}
+         if channel in (0,1):
+          uv_payload[f"m_UV{channel}"]=[list(x) for x in uv_values]
        if uv_summary:
         uv_channel_records.append({"source":src,"path_id":pid,"name":str(name),"channels":uv_summary})
        if uv_payload:
