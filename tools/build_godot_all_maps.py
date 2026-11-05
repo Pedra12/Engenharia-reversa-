@@ -77,7 +77,8 @@ def enhance_india_atlas(source:pathlib.Path,destination:pathlib.Path):
 
 
 def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path:pathlib.Path,
-                                 output_path:pathlib.Path,first_sub_mesh:int=0,sub_mesh_count:int=0):
+                                 output_path:pathlib.Path,first_sub_mesh:int=0,sub_mesh_count:int=0,
+                                 lightmap_st:dict|None=None):
     """Create a GLB with original UV0 and baked Unity lightmap in vertex colors."""
     try:
         import numpy as np
@@ -93,7 +94,17 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
     if len(uv0)==0 or len(uv0)!=len(uv1):
         raise ValueError(f"India UV channel mismatch: {uv_path.name}")
     if np.any(uv0 < -0.001) or np.any(uv0 > 1.001) or np.any(uv1 < -0.001) or np.any(uv1 > 1.001):
-        raise ValueError(f"India UV coordinates outside 0..1: {uv_path.name}")
+        raise ValueError(f"India source UV coordinates outside 0..1: {uv_path.name}")
+    # Unity stores the lightmap atlas transform on each MeshRenderer as
+    # m_LightmapTilingOffset = (scale_x, scale_y, offset_x, offset_y).
+    # Apply it before sampling the shared lightmap texture; raw mesh UV1 alone
+    # samples the wrong atlas region for packed renderers.
+    st=lightmap_st or {}
+    scale_x=float(st.get("x",1.0)); scale_y=float(st.get("y",1.0))
+    offset_x=float(st.get("z",0.0)); offset_y=float(st.get("w",0.0))
+    uv1=uv1*np.asarray([scale_x,scale_y],dtype=np.float32)+np.asarray([offset_x,offset_y],dtype=np.float32)
+    if np.any(uv1 < -0.001) or np.any(uv1 > 1.001):
+        raise ValueError(f"India transformed lightmap UV outside 0..1: {uv_path.name}; ST={st}")
 
     positions=[]; normals=[]; texcoords=[]; groups=[]; current=None
     with obj_path.open(encoding="utf-8",errors="replace") as source:
@@ -228,7 +239,7 @@ def main():
         d=json.loads(path.read_text(encoding="utf-8")); copied=set(); tex=set(); missing=[]
         india_lightmap_bakes=[]
         def walk(n):
-            meshpath=""; colpath=""; mats=[]; batch=None; lightmap_index=None
+            meshpath=""; colpath=""; mats=[]; batch=None; lightmap_index=None; lightmap_st=None
             for comp in n.get("components",[]):
                 typ=comp.get("type","")
                 if typ in ("MeshFilter","SkinnedMeshRenderer"):
@@ -241,6 +252,7 @@ def main():
                     mats=comp.get("material_resources",[])
                     batch=comp.get("static_batch_info")
                     lightmap_index=comp.get("m_LightmapIndex")
+                    lightmap_st=(comp.get("m_LightmapTilingOffset") or comp.get("m_LightmapST") or comp.get("m_LightmapScaleOffset"))
                 for material in comp.get("material_resources",[]):
                     for texture in material.get("textures",[]):
                         png=texture.get("exported_png")
@@ -311,7 +323,7 @@ def main():
                 tid=str(n.get("transform_path_id",n.get("name","node")))
                 glb_name=f"india_lightmapped_{tid}.glb"
                 glb_path=meshes/glb_name
-                result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count)
+                result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count,lightmap_st)
                 n["godot_render_obj"]=glb_name
                 n["godot_lightmap_vertex_colors"]=True
                 # GLB primitives are sliced from the original Unity static-batch
@@ -319,7 +331,7 @@ def main():
                 # each surface receives its matching Unity material, not mats[0].
                 n["godot_material_start_index"]=first if count>0 else 0
                 all_meshes.add(glb_name); copied.add(glb_name)
-                india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,**result})
+                india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,"lightmap_st":lightmap_st,**result})
             n["godot_materials"]=mats
             # Mirror the exact per-axis correction applied to CollisionShape3D
             # so geometry-based stair probes use the same world dimensions.
