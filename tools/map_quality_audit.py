@@ -89,7 +89,7 @@ def obj_surface_features(path,scale_y=1.0):
  return {"missing":False,"bounds":bounds,"horizontal_levels":[{"y":y,"triangles":n} for y,n in sorted(levels.items(),key=lambda q:-q[1])[:30]],"stair_geometry_candidate":len(best)>=3,"candidate_tread_sequence":[{"y":y,"triangles":n} for y,n in best] if len(best)>=3 else []}
 
 
-def _cluster_xz(points,eps=1.2,min_count=3):
+def _cluster_xz(points,eps=0.45,min_count=2):
  cell=eps; buckets=collections.defaultdict(list)
  for i,p in enumerate(points): buckets[(int(p[0]//cell),int(p[1]//cell))].append(i)
  unseen=set(range(len(points))); found=[]
@@ -138,7 +138,7 @@ def stair_route_candidates(mesh_path,scale,position,node_name,correction=None):
   nx=uy*vz-uz*vy; ny=uz*vx-ux*vz; nz=ux*vy-uy*vx
   norm=(nx*nx+ny*ny+nz*nz)**0.5
   if norm<1e-9 or abs(ny)/norm<0.96: continue
-  y=round((a[1]+b[1]+c[1])/3,3)
+  y=round((a[1]+b[1]+c[1])/3,2)
   levels[y].append(((a[0]+b[0]+c[0])/3,(a[2]+b[2]+c[2])/3))
  nodes=[]
  for y,points in sorted(levels.items()):
@@ -150,7 +150,7 @@ def stair_route_candidates(mesh_path,scale,position,node_name,correction=None):
   for i in range(j):
    yi,xi=nodes[i]; dy=yj-yi
    if dy<0.07 or dy>0.32: continue
-   if (xj[0]-xi[0])**2+(xj[1]-xi[1])**2>1.6**2: continue
+   if (xj[0]-xi[0])**2+(xj[1]-xi[1])**2>1.0**2: continue
    if len(best_paths[i])+1>len(best_paths[j]):
     best_paths[j]=best_paths[i]+[j]
  best_path=max(best_paths,key=len)
