@@ -770,20 +770,28 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
     var object_lower=object_name.to_lower()
     var sm=StandardMaterial3D.new()
     sm.roughness=0.88
+    # Textures are assigned only from the explicit Unity Material -> Texture2D
+    # references serialized in each map manifest. Do not infer from GameObject names.
     for t in m.get("textures",[]):
-        var p=String(t.get("exported_png",""))
-        if p!="":
-            var tx=load("res://assets/textures/"+p.get_file()) as Texture2D
+        var source_png=String(t.get("exported_png",""))
+        if source_png!="":
+            # Export step copies the referenced original PNG by its exact filename
+            # into assets/textures; this path is recorded in the generated manifest.
+            var texture_path=String(t.get("godot_texture_path",""))
+            if texture_path=="":
+                texture_path="res://assets/textures/"+source_png.get_file()
+            var tx=load(texture_path) as Texture2D
             if tx:
                 sm.albedo_texture=tx
                 break
-    if material_name.contains("alpha") or object_lower.contains("alpha"):
+    # Shader/material behavior follows the recovered Unity Material name/reference,
+    # never a guessed object-name category.
+    if material_name=="m_atlas_environment_alpha":
         sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
         sm.alpha_scissor_threshold=0.42
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
-    if material_name.contains("water") or object_lower.contains("water"):
+    if material_name=="m_water" or material_name=="water":
         sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
-        sm.albedo_color=Color(0.28,0.58,0.72,0.58)
         sm.roughness=0.16
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
     # All map materials use preprocessed textures; no procedural India shader at runtime.
