@@ -102,7 +102,7 @@ def main():
        if not b: break
        dst.write(b)
    env=UnityPy.load(str(root)); objects=list(env.objects)
-   records={}; errors=[]; counts=collections.Counter(); external_paths={}; mesh_exports={}; texture_exports={}
+   records={}; errors=[]; counts=collections.Counter(); external_paths={}; mesh_exports={}; texture_exports={}; uv_channel_records=[]; uv_channel_exports={}
    for i,o in enumerate(objects):
     pid=int(getattr(o,"path_id",i)); t=typ(o); src=source(o)
     try:
@@ -124,8 +124,28 @@ def main():
         texture_exports[(src,pid)]=str(pathlib.Path("exported_textures")/texture_name)
       except Exception as texture_error:
        errors.append({"source":src,"path_id":pid,"type":t,"error":"texture export: "+str(texture_error)[:220]})
+     uv_summary={}
      if t=="Mesh":
       try:
+       # Read original Unity UV streams before OBJ conversion discards secondary channels.
+       uv_payload={}
+       for channel in range(8):
+        raw_uv=attr(d,f"m_UV{channel}")
+        if raw_uv is None: continue
+        try:
+         uv_values=list(raw_uv)
+         uv_summary[str(channel)]={"count":len(uv_values),"sample":[val(x) for x in uv_values[:4]]}
+         if str(name).startswith("umsh_india_") and channel in (0,1):
+          uv_payload[f"m_UV{channel}"]=[val(x) for x in uv_values]
+        except Exception as uv_error:
+         uv_summary[str(channel)]={"error":str(uv_error)[:180],"type":type(raw_uv).__name__}
+       if uv_summary:
+        uv_channel_records.append({"source":src,"path_id":pid,"name":str(name),"channels":uv_summary})
+       if uv_payload:
+        uv_dir=OUT/"uv_channels"; uv_dir.mkdir(parents=True,exist_ok=True)
+        uv_name=f"{safe(src)}__{pid}__{safe(name or 'mesh')}.uv.json"
+        (uv_dir/uv_name).write_text(json.dumps(uv_payload,separators=(",",":")),encoding="utf-8")
+        uv_channel_exports[(src,pid)]=str(pathlib.Path("uv_channels")/uv_name)
        exported=d.export()
        payload=exported if isinstance(exported,bytes) else str(exported).encode("utf-8")
        mesh_dir=OUT/"exported_meshes"; mesh_dir.mkdir(parents=True,exist_ok=True)
@@ -137,6 +157,9 @@ def main():
      r={"source":src,"path_id":pid,"type":t,"name":str(name)[:220],"refs":[]}
      if t=="MeshRenderer":
       r["static_batch_info"]=static_batch_info(d)
+     if t=="Mesh":
+      r["uv_channels"]=uv_summary
+      if (src,pid) in uv_channel_exports: r["uv_channel_export"]=uv_channel_exports[(src,pid)]
      counts[t]+=1
      for f in FIELDS.get(t,()):
       for p in refs(attr(d,f)):
