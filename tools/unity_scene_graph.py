@@ -162,6 +162,7 @@ def main():
       r["materials"]=[x["path_id"] for x in refs(attr(d,"m_Materials"))]
      records[(src,pid)]=r
     except Exception as e: errors.append({"source":src,"path_id":pid,"type":t,"error":str(e)[:250]})
+   (OUT/"UNITY_UV_CHANNEL_AUDIT.json").write_text(json.dumps(uv_channel_records,ensure_ascii=False,indent=2),encoding="utf-8")
    index={(r["source"],r["path_id"]):r for r in records.values()}
    edges=[]; hierarchy=[]; roots=[]
    for r in records.values():
