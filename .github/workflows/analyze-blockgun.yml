@@ -71,6 +71,18 @@ jobs:
         run: python3 tools/build_godot_all_maps.py
       - name: Audit every map assets, interiors and stair candidates
         run: python3 tools/map_quality_audit.py
+      - name: Preserve map audit data even if validation fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockGun-Map-Diagnostics
+          path: |
+            inventory_out/*QUALITY_AUDIT*
+            inventory_out/BLOCKGUN_MAP_QUALITY_AUDIT.*
+            godot_project/data/*.json
+            /tmp/map-audit.log
+          if-no-files-found: warn
+          retention-days: 30
       - name: Validate generated project with Godot 4.4.1
         shell: bash
         run: |
