@@ -706,7 +706,7 @@ func _audit_all_maps():
             var saved_stair_yaw=walk_yaw
             walk_yaw=atan2(-route_delta.normalized().x,-route_delta.normalized().z)
             move_vector=Vector2(0,-1)
-            var route_frames=clampi(int(ceil(float(route.get("horizontal_distance",1.0))/4.5*60.0))+8,12,60)
+            var route_frames=clampi(int(ceil(float(route.get("horizontal_distance",1.0))/4.5*60.0))+1,4,60)
             for frame in range(route_frames):
                 await get_tree().physics_frame
             move_vector=Vector2.ZERO
