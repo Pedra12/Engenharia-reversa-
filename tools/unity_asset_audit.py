@@ -186,7 +186,7 @@ def main():
                     elif typ=="Avatar":
                         avatar_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_Avatar","m_TOS","m_Name"])})
-                    scene_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification")
+                    scene_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable")
                     if typ in scene_types:
                         fields_by_type={
                           "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject","m_PrefabInternal","m_PrefabParentObject"],
@@ -195,6 +195,13 @@ def main():
                           "Canvas":["m_GameObject","m_Enabled","m_RenderMode","m_Camera","m_SortingOrder","m_TargetDisplay"],
                           "CanvasRenderer":["m_GameObject","m_CullTransparentMesh"],
                           "CanvasGroup":["m_GameObject","m_Enabled","m_Alpha","m_Interactable","m_BlocksRaycasts"],
+                          "Image":["m_GameObject","m_Enabled","m_Sprite","m_Color","m_Material","m_RaycastTarget","m_Type","m_FillMethod","m_FillAmount","m_FillCenter","m_FillClockwise","m_FillOrigin","m_UseSpriteMesh","m_PreserveAspect","m_Maskable"],
+                          "RawImage":["m_GameObject","m_Enabled","m_Texture","m_Color","m_RaycastTarget","m_UVRect","m_Maskable"],
+                          "Button":["m_GameObject","m_Enabled","m_Interactable","m_Transition","m_Colors","m_SpriteState","m_AnimationTriggers","m_TargetGraphic","m_OnClick"],
+                          "Text":["m_GameObject","m_Enabled","m_Text","m_Font","m_FontSize","m_FontStyle","m_Color","m_Alignment","m_HorizontalOverflow","m_VerticalOverflow","m_RichText"],
+                          "TextMeshProUGUI":["m_GameObject","m_Enabled","m_text","m_fontSize","m_fontAsset","m_color","m_alignment","m_enableAutoSizing"],
+                          "CanvasScaler":["m_GameObject","m_Enabled","m_UiScaleMode","m_ReferencePixelsPerUnit","m_ScaleFactor","m_ReferenceResolution","m_ScreenMatchMode","m_MatchWidthOrHeight"],
+                          "GraphicRaycaster":["m_GameObject","m_Enabled","m_IgnoreReversedGraphics","m_BlockingObjects","m_BlockingMask"],
                           "MonoBehaviour":["m_GameObject","m_Enabled","m_Script","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
                           "MeshFilter":["m_GameObject","m_Mesh"],
                           "MeshRenderer":["m_GameObject","m_Enabled","m_Materials"],
@@ -210,7 +217,7 @@ def main():
                         record={"source":source,"path_id":str(pid),"type":typ,"name":str(name)[:250],
                                 "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
                                 "fields":selected_fields(data,fields_by_type.get(typ,[]))}
-                        if typ=="MonoBehaviour":
+                        if typ in ("MonoBehaviour","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable"):
                             try: record["serialized_fields"]=json_safe(obj.read_typetree())
                             except Exception as e: record["typetree_error"]=str(e)[:200]
                         scene_records.append(record)
