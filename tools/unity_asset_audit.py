@@ -284,6 +284,69 @@ def main():
                 continue
             blob=source_zip.read(n); save(dest,blob)
             library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    # Preserve the exact renderer, mesh, armature and bone Transform hierarchy for every recovered skinned mesh.
+    catalog_by_key={(r.get("source",""),str(r.get("path_id",""))):r for r in rows}
+    transform_by_key={(r.get("source",""),str(r.get("path_id",""))):r for r in scene_records if r.get("type") in ("Transform","RectTransform")}
+    gameobject_by_key={(r.get("source",""),str(r.get("path_id",""))):r for r in scene_records if r.get("type")=="GameObject"}
+    transform_by_go={}
+    for tr in transform_by_key.values():
+        gp=tr.get("fields",{}).get("m_GameObject",{})
+        transform_by_go[(tr.get("source",""),str(gp.get("m_PathID","0")))]=tr
+    skin_names={x.get("name","") for x in skin_records}
+    def resolve_record_source(owner_source, external_files, ptr):
+        if not isinstance(ptr,dict): return owner_source
+        fid=int(ptr.get("m_FileID",0) or 0)
+        if fid>0 and fid<=len(external_files):
+            return str(external_files[fid-1].get("path",owner_source))
+        return owner_source
+    included_transforms={}
+    included_gameobjects={}
+    rig_renderers=[]
+    def add_transform_chain(src,pid):
+        current=str(pid)
+        visited=set()
+        while current and current!="0" and (src,current) not in visited:
+            visited.add((src,current))
+            tr=transform_by_key.get((src,current))
+            if not tr: break
+            included_transforms[(src,current)]=tr
+            gp=tr.get("fields",{}).get("m_GameObject",{})
+            gsrc=resolve_record_source(src,tr.get("external_files",[]),gp)
+            gid=str(gp.get("m_PathID","0"))
+            go=gameobject_by_key.get((gsrc,gid))
+            if go: included_gameobjects[(gsrc,gid)]=go
+            father=tr.get("fields",{}).get("m_Father",{})
+            src=resolve_record_source(src,tr.get("external_files",[]),father)
+            current=str(father.get("m_PathID","0"))
+    for smr in (r for r in scene_records if r.get("type")=="SkinnedMeshRenderer"):
+        fields=smr.get("fields",{}); ext=smr.get("external_files",[])
+        mesh_ptr=fields.get("m_Mesh",{})
+        mesh_source=resolve_record_source(smr.get("source",""),ext,mesh_ptr)
+        mesh_row=catalog_by_key.get((mesh_source,str(mesh_ptr.get("m_PathID","0"))),{})
+        mesh_name=mesh_row.get("name","")
+        if mesh_name not in skin_names: continue
+        go_ptr=fields.get("m_GameObject",{})
+        go_source=resolve_record_source(smr.get("source",""),ext,go_ptr)
+        go_id=str(go_ptr.get("m_PathID","0"))
+        go=gameobject_by_key.get((go_source,go_id))
+        mesh_tr=transform_by_go.get((go_source,go_id))
+        if mesh_tr: add_transform_chain(mesh_tr.get("source",""),mesh_tr.get("path_id","0"))
+        bone_records=[]
+        for bone_index,bone_ptr in enumerate(fields.get("m_Bones",[]) or []):
+            bone_source=resolve_record_source(smr.get("source",""),ext,bone_ptr)
+            bone_id=str(bone_ptr.get("m_PathID","0"))
+            if bone_id!="0": add_transform_chain(bone_source,bone_id)
+            bone_records.append({"mesh_bone_index":bone_index,"source":bone_source,"path_id":bone_id})
+        root_ptr=fields.get("m_RootBone",{})
+        root_source=resolve_record_source(smr.get("source",""),ext,root_ptr)
+        if str(root_ptr.get("m_PathID","0"))!="0": add_transform_chain(root_source,root_ptr.get("m_PathID","0"))
+        rig_renderers.append({"source":smr.get("source"),"path_id":smr.get("path_id"),"mesh_name":mesh_name,
+            "mesh_source":mesh_source,"mesh_path_id":str(mesh_ptr.get("m_PathID","0")),
+            "gameobject_source":go_source,"gameobject_path_id":go_id,"gameobject_name":go.get("name","") if go else "",
+            "mesh_transform":mesh_tr,"bones":bone_records,"root_bone":{"source":root_source,"path_id":str(root_ptr.get("m_PathID","0"))},
+            "materials":fields.get("m_Materials",[])})
+    (OUT/"UNITY_RIG_HIERARCHY.json").write_text(json.dumps({"renderers":rig_renderers,
+        "transforms":list(included_transforms.values()),"gameobjects":list(included_gameobjects.values())},ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_SCENE_OBJECTS.json").write_text(json.dumps(scene_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
