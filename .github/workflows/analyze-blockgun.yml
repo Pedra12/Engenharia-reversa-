@@ -1,5 +1,9 @@
 name: Block Gun - Floresta combat build and asset audit
 
+concurrency:
+  group: blockgun-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main, feature/floresta-combate-mobile]
