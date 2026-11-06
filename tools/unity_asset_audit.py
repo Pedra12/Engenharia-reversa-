@@ -130,17 +130,26 @@ def main():
                             b=src.read(1024*1024)
                             if not b: break
                             out.write(b)
-            # Also parse already-extracted Unity bundle containers, if present.
-            bundle_names=[n for n in names if n.startswith("unity/assets/") and n.lower().endswith((".bundle",".unity3d",".assetbundle"))]
-            for n in bundle_names:
-                dest=root/("bundles"/PurePosixPath(n).name)
+            # Recover all Unity Addressables/AssetBundle containers, not only the legacy unity/assets folder.
+            bundle_exts=(".bundle",".unity3d",".assetbundle",".ab")
+            bundle_markers=("/aa/android/","/assetbundles/","/streamingassets/")
+            bundle_names=[n for n in names if n.lower().endswith(bundle_exts) or
+                          (any(marker in n.lower() for marker in bundle_markers) and not n.endswith("/"))]
+            bundle_manifest=[]
+            for n in sorted(bundle_names):
+                rel=PurePosixPath(n)
+                dest=root/"bundles"/(safe(rel.parent.name)+"_"+safe(rel.name))
                 dest.parent.mkdir(parents=True,exist_ok=True)
                 with z.open(n) as src, open(dest,"wb") as out:
+                    total=0
                     while True:
                         b=src.read(1024*1024)
                         if not b: break
-                        out.write(b)
-            print("REASSEMBLED",len(assembled),"BUNDLES",len(bundle_names))
+                        out.write(b); total+=len(b)
+                bundle_manifest.append({"archive_path":n,"extracted_path":str(dest.relative_to(root)),"size":total})
+            with open(OUT/"ARCHIVE_BUNDLE_CANDIDATES.csv","w",newline="",encoding="utf-8") as fh:
+                w=csv.DictWriter(fh,fieldnames=["archive_path","extracted_path","size"]);w.writeheader();w.writerows(bundle_manifest)
+            print("REASSEMBLED",len(assembled),"BUNDLES",len(bundle_names),"BUNDLE_BYTES",sum(x["size"] for x in bundle_manifest))
             env=UnityPy.load(str(root))
             objects=list(env.objects)
             print("UNITY_OBJECTS",len(objects))
