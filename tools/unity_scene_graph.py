@@ -299,6 +299,67 @@ def main():
     out_name=safe(map_name)+".json"
     (map_dir/out_name).write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     map_manifests.append({"level":level,"map":map_name,"nodes":manifest["node_count"],"file":str(pathlib.Path("maps")/out_name)})
+   # Export the original gameplay crate hierarchy from level0.
+   # These objects use SkinnedMeshRenderer, so renderer-local material slots
+   # must be preserved independently from MeshRenderer components.
+   gameplay_prefabs=[]
+   gameplay_source="level0"
+   gameplay_transforms={int(r["path_id"]):r for r in records.values() if r["source"]==gameplay_source and r["type"] in TRANSFORMS}
+   gameplay_gameobjects={int(r["path_id"]):r for r in records.values() if r["source"]==gameplay_source and r["type"]=="GameObject"}
+   gameplay_components={int(r["path_id"]):r for r in records.values() if r["source"]==gameplay_source and r["type"] not in TRANSFORMS and r["type"]!="GameObject"}
+   gameplay_transform_by_go={int(r["game_object"]):int(r["path_id"]) for r in gameplay_transforms.values() if r.get("game_object") is not None}
+   def gameplay_component_info(cid):
+    c=gameplay_components.get(int(cid))
+    if not c: return {"path_id":int(cid),"type":"UNKNOWN"}
+    info={"path_id":int(cid),"type":c["type"],"name":c["name"],"references":[]}
+    renderer=c["type"] in ("MeshRenderer","SkinnedMeshRenderer")
+    material_refs=[ref for ref in c.get("refs",[]) if ref.get("field")=="m_Materials"]
+    if renderer:
+     info["material_slot_count"]=len(material_refs)
+     info["material_binding_status"]="EXPLICIT_MATERIALS" if material_refs else "EMPTY_IN_UNITY_SERIALIZATION"
+    for ref in c.get("refs",[]):
+     target_source=ref.get("target_source") or gameplay_source
+     entry={"field":ref["field"],"target_source":target_source,"target_path_id":ref["path_id"]}
+     if ref["field"]=="m_Mesh":
+      entry["exported_obj"]=mesh_exports.get((target_source,ref["path_id"]))
+     info["references"].append(entry)
+     if renderer and ref["field"]=="m_Materials":
+      material=index.get((target_source,ref["path_id"]))
+      if material:
+       slot={"slot_index":len(info.setdefault("material_slots",[])),"source":target_source,"path_id":ref["path_id"],"name":material["name"],
+        "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],
+        "unity_uv_transforms":material.get("unity_uv_transforms",[]),
+        "unity_color_properties":material.get("unity_color_properties",[]),
+        "shader_refs":[{"source":x.get("target_source"),"path_id":x["path_id"]} for x in material.get("refs",[]) if x["field"]=="m_Shader"]}
+       info["material_slots"].append(slot)
+       info.setdefault("material_resources",[]).append(slot)
+    return info
+   def build_gameplay_node(tid,seen):
+    if tid in seen: return {"error":"cycle","transform_path_id":tid}
+    seen=seen|{tid}; tr=gameplay_transforms[tid]; go=gameplay_gameobjects.get(tr.get("game_object"))
+    node={"name":go["name"] if go else tr["name"],"transform_path_id":tid,"game_object_path_id":tr.get("game_object"),
+     "position":tr.get("m_LocalPosition"),"rotation":tr.get("m_LocalRotation"),"scale":tr.get("m_LocalScale"),
+     "active":go.get("active") if go else None,"layer":go.get("layer") if go else None,"tag":go.get("tag") if go else None,
+     "components":[gameplay_component_info(cid) for cid in (go.get("components",[]) if go else [])],"children":[]}
+    for child_id in tr.get("children",[]):
+     if int(child_id) in gameplay_transforms: node["children"].append(build_gameplay_node(int(child_id),seen))
+    return node
+   crate_roots=[go for go in gameplay_gameobjects.values() if str(go.get("name","")).lower()=="haz_fps_crates"]
+   for root_go in crate_roots:
+    transform_id=gameplay_transform_by_go.get(int(root_go["path_id"]))
+    if transform_id is None: continue
+    root_node=build_gameplay_node(transform_id,set())
+    def count_gameplay_nodes(node):
+     return 1+sum(count_gameplay_nodes(child) for child in node.get("children",[]))
+    prefab={"name":root_go["name"],"source_level":gameplay_source,"root_game_object_path_id":int(root_go["path_id"]),
+     "root_transform_path_id":transform_id,"node_count":count_gameplay_nodes(root_node),"root":root_node}
+    gameplay_prefabs.append(prefab)
+   gameplay_dir=OUT/"gameplay_prefabs"; gameplay_dir.mkdir(parents=True,exist_ok=True)
+   (OUT/"UNITY_GAMEPLAY_PREFABS.json").write_text(json.dumps({"source":"Unity serialized level0","prefabs":gameplay_prefabs,
+    "tank_vehicle_prefabs_found":sum(1 for r in records.values() if r["type"]=="GameObject" and "tank" in str(r.get("name","")).lower()),
+    "notes":["Renderer material arrays are preserved in serialized slot order.","An empty Unity m_Materials array is reported as missing; no guessed material is assigned.","Tank_Keychain is a separate mesh asset, not a tank vehicle prefab."]},ensure_ascii=False,indent=2),encoding="utf-8")
+   for prefab in gameplay_prefabs:
+    (gameplay_dir/(safe(prefab["name"])+".json")).write_text(json.dumps(prefab,ensure_ascii=False,indent=2),encoding="utf-8")
    def write_csv(path,rows):
     rows=list(rows)
     if not rows: path.write_text("no_data\n",encoding="utf-8"); return
