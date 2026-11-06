@@ -250,6 +250,7 @@ def main():
         if source.is_file():
             shutil.copy2(source,reference_dir/source.name)
     subprocess.run([sys.executable,"tools/convert_unity_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    subprocess.run([sys.executable,"tools/convert_unity_animations.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
     hud_layout=pathlib.Path("unity_audit")/"UNITY_HUD_LAYOUT.json"
     if hud_layout.is_file():
         shutil.copy2(hud_layout,combat_assets/"original_hud_layout.json")
