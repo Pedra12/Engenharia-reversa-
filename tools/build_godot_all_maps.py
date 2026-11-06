@@ -400,6 +400,65 @@ def main():
         walk(d["root"])
         (data_dir/(mapid+".json")).write_text(json.dumps(d,ensure_ascii=False),encoding="utf-8")
         catalog.append({"id":mapid,"name":names[mapid],"nodes":d.get("node_count",0),"meshes":len(copied),"textures":len(tex),"missing":len(missing),"india_lightmap_bakes":india_lightmap_bakes})
+    # Copy the original level0 gameplay crate hierarchy into Godot as a
+    # separately inspectable prefab catalog. Preserve renderer-local material
+    # slots and only copy explicitly referenced Unity textures.
+    gameplay_source_manifest=ROOT/"UNITY_GAMEPLAY_PREFABS.json"
+    gameplay_prefab_data={"prefabs":[]}
+    if gameplay_source_manifest.is_file():
+        source_data=json.loads(gameplay_source_manifest.read_text(encoding="utf-8"))
+        gameplay_bindings=[]
+        def prepare_gameplay_node(node):
+            node["godot_render_obj"]=""
+            node["godot_materials"]=[]
+            node["godot_material_start_index"]=0
+            for comp in node.get("components",[]):
+                if comp.get("type") not in ("MeshRenderer","SkinnedMeshRenderer"):
+                    continue
+                mesh_ref=next((ref for ref in comp.get("references",[]) if ref.get("field")=="m_Mesh"),None)
+                if mesh_ref and mesh_ref.get("exported_obj"):
+                    source_obj=ROOT/mesh_ref["exported_obj"]
+                    if not source_obj.is_file():
+                        raise SystemExit("Gameplay prefab mesh missing: "+str(source_obj))
+                    mesh_name=source_obj.name
+                    target_obj=meshes/mesh_name
+                    if not target_obj.is_file():
+                        shutil.copy2(source_obj,target_obj)
+                    all_meshes.add(mesh_name)
+                    node["godot_render_obj"]=mesh_name
+                materials=comp.get("material_resources",[])
+                for material in materials:
+                    for texture in material.get("textures",[]):
+                        exported_png=texture.get("exported_png","")
+                        if not exported_png:
+                            continue
+                        source_png=ROOT/exported_png
+                        if not source_png.is_file():
+                            raise SystemExit("Gameplay prefab texture missing: "+str(source_png))
+                        texture_name=source_png.name
+                        target_png=textures/texture_name
+                        if not target_png.is_file():
+                            shutil.copy2(source_png,target_png)
+                        all_textures.add(texture_name)
+                        texture["godot_texture_path"]="res://assets/textures/"+texture_name
+                node["godot_materials"]=materials
+                node["godot_material_binding_status"]=comp.get("material_binding_status","NOT_A_RENDERER")
+                node["godot_material_slot_count"]=comp.get("material_slot_count",len(materials))
+                node["godot_renderer_type"]=comp.get("type")
+                gameplay_bindings.append({"node":node.get("name",""),"renderer_type":comp.get("type"),
+                    "mesh":node["godot_render_obj"],"material_slot_count":node["godot_material_slot_count"],
+                    "material_binding_status":node["godot_material_binding_status"],
+                    "materials":[{"slot":m.get("slot_index",i),"name":m.get("name",""),"source":m.get("source",""),"path_id":m.get("path_id","")} for i,m in enumerate(materials)]})
+                break
+            for child in node.get("children",[]):
+                prepare_gameplay_node(child)
+        for prefab in source_data.get("prefabs",[]):
+            prepare_gameplay_node(prefab["root"])
+            gameplay_prefab_data["prefabs"].append(prefab)
+        gameplay_prefab_data["renderer_bindings"]=gameplay_bindings
+        gameplay_prefab_data["tank_vehicle_prefabs_found"]=source_data.get("tank_vehicle_prefabs_found",0)
+        gameplay_prefab_data["notes"]=source_data.get("notes",[])
+    (data_dir/"gameplay_prefabs.json").write_text(json.dumps(gameplay_prefab_data,ensure_ascii=False,indent=2),encoding="utf-8")
     catalog_path=data_dir/"maps.json"
     if requested_map and catalog_path.exists():
         existing=json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -495,6 +554,9 @@ func _ready():
     if OS.get_cmdline_user_args().has("--audit-all-maps"):
         call_deferred("_audit_all_maps")
         return
+    if OS.get_cmdline_user_args().has("--audit-gameplay-prefabs"):
+        call_deferred("_audit_gameplay_prefabs")
+        return
     # Always create a real 3D scene before showing the front end.
     _load_map("lvl_forest","Floresta")
     _show_home()
@@ -555,6 +617,11 @@ func _make_menu():
     maps.custom_minimum_size.y=48
     maps.pressed.connect(_show_map_select)
     home_box.add_child(maps)
+    var gameplay_assets=Button.new()
+    gameplay_assets.text="CAIXAS DE GAMEPLAY"
+    gameplay_assets.custom_minimum_size.y=48
+    gameplay_assets.pressed.connect(_load_gameplay_prefabs)
+    home_box.add_child(gameplay_assets)
     var version=Label.new()
     version.text="VERSÃO DE DESENVOLVIMENTO  |  BUILD EXPERIMENTAL"
     version.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -696,6 +763,32 @@ func _load_map(id:String,title:String):
     map_actions.visible=true
     map_label.text="CENÁRIO: "+title.to_upper()+" | PRÉVIA 3D"
     print("MAP_LOADED ",id," nodes=",d.get("node_count",0)," meshes=",_count_meshes(world))
+func _load_gameplay_prefabs():
+    _stop_walk_mode()
+    if world:
+        world.queue_free()
+    world=Node3D.new()
+    world.name="GameplayPrefabs"
+    add_child(world)
+    var f=FileAccess.open("res://data/gameplay_prefabs.json",FileAccess.READ)
+    if f==null:
+        push_error("Gameplay prefab manifest missing")
+        return
+    var d=JSON.parse_string(f.get_as_text())
+    if not d is Dictionary or not d.has("prefabs"):
+        push_error("Invalid gameplay prefab manifest")
+        return
+    for prefab in d.get("prefabs",[]):
+        _build_node(prefab.get("root",{}),world,"gameplay")
+    _create_camera()
+    _fit_camera()
+    home_panel.visible=false
+    selection_panel.visible=false
+    tutorial_panel.visible=false
+    map_label.visible=true
+    map_actions.visible=true
+    map_label.text="ASSETS DE GAMEPLAY | CAIXAS"
+    print("GAMEPLAY_PREFABS_LOADED count=",d.get("prefabs",[]).size()," meshes=",_count_meshes(world))
 func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     var n=Node3D.new()
     n.name=String(d.get("name","Recovered")).replace("/","_")
@@ -1109,6 +1202,65 @@ func _audit_all_maps():
     else:
         print("BLOCKGUN_ALL_MAPS_AUDIT_OK count=",MAPS.size())
         get_tree().quit(0)
+func _audit_gameplay_prefabs():
+    var f=FileAccess.open("res://data/gameplay_prefabs.json",FileAccess.READ)
+    if f==null:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: manifest missing")
+        get_tree().quit(1)
+        return
+    var data=JSON.parse_string(f.get_as_text())
+    if not data is Dictionary or data.get("prefabs",[]).is_empty():
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: no recovered prefab hierarchy")
+        get_tree().quit(1)
+        return
+    var prefab=data["prefabs"][0]
+    var audit_root=Node3D.new()
+    add_child(audit_root)
+    _build_node(prefab.get("root",{}),audit_root,"gameplay")
+    await get_tree().process_frame
+    var crate2=audit_root.find_child("haz_fps_crate2_base",true,false)
+    if crate2==null:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 node missing")
+        get_tree().quit(1)
+        return
+    var crate2_meshes=crate2.find_children("*","MeshInstance3D",true,false)
+    if crate2_meshes.is_empty():
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 mesh missing")
+        get_tree().quit(1)
+        return
+    var crate2_instance=crate2_meshes[0] as MeshInstance3D
+    if crate2_instance.mesh==null or crate2_instance.mesh.get_surface_count()<1:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 surface missing")
+        get_tree().quit(1)
+        return
+    var crate2_material=crate2_instance.get_active_material(0)
+    if not crate2_material is StandardMaterial3D:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: explicit Unity unlit material was not assigned")
+        get_tree().quit(1)
+        return
+    var standard=crate2_material as StandardMaterial3D
+    if standard.shading_mode!=BaseMaterial3D.SHADING_MODE_UNSHADED:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: unlit shader behavior was not preserved")
+        get_tree().quit(1)
+        return
+    var crate1=audit_root.find_child("haz_fps_crate1_base",true,false)
+    if crate1==null:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate1 node missing")
+        get_tree().quit(1)
+        return
+    var bindings=data.get("renderer_bindings",[])
+    var crate1_binding=bindings.filter(func(x): return x.get("node","")=="haz_fps_crate1_base")
+    var crate2_binding=bindings.filter(func(x): return x.get("node","")=="haz_fps_crate2_base")
+    if crate1_binding.is_empty() or crate1_binding[0].get("material_slot_count",-1)!=0:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate1 empty Unity material array was not preserved")
+        get_tree().quit(1)
+        return
+    if crate2_binding.is_empty() or crate2_binding[0].get("material_slot_count",0)!=1 or crate2_binding[0].get("materials",[])[0].get("name","")!="unlit":
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 Unity material slot mapping is incorrect")
+        get_tree().quit(1)
+        return
+    print("GAMEPLAY_PREFAB_BINDING_AUDIT_OK nodes=",prefab.get("node_count",0)," crate1_slots=0 crate2_slot0=unlit unlit_shader=preserved")
+    get_tree().quit(0)
 func _unhandled_input(event):
     if walk_mode:
         _walk_input(event)
