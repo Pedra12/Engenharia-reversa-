@@ -131,21 +131,21 @@ jobs:
             /tmp/map-audit.log
           if-no-files-found: warn
           retention-days: 30
-      - name: Validate generated project with Godot 4.4.1
+      - name: Validate generated project with Godot 4.5.2
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o /tmp/godot.zip
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.2-stable/Godot_v4.5.2-stable_linux.x86_64.zip -o /tmp/godot.zip
           mkdir -p /tmp/godot
           unzip -q /tmp/godot.zip -d /tmp/godot
-          chmod +x /tmp/godot/Godot_v4.4.1-stable_linux.x86_64
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot_project --import --quit 2>&1 | tee /tmp/godot-import.log
+          chmod +x /tmp/godot/Godot_v4.5.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.5.2-stable_linux.x86_64 --headless --editor --path godot_project --import --quit 2>&1 | tee /tmp/godot-import.log
           if grep -Eq 'Failed loading resource|SCRIPT ERROR:|Parse Error:|Parameter "t" is null|INDIA_TEXTURE_RESOURCE_MISSING' /tmp/godot-import.log; then
             echo "Godot import reported a resource, script, or null-texture failure."
             exit 1
           fi
           set +e
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project --quit-after 8 2>&1 | tee /tmp/godot-runtime.log
+          /tmp/godot/Godot_v4.5.2-stable_linux.x86_64 --headless --path godot_project --quit-after 8 2>&1 | tee /tmp/godot-runtime.log
           GODOT_STATUS=${PIPESTATUS[0]}
           set -e
           if [ "$GODOT_STATUS" -ne 0 ]; then
@@ -160,7 +160,7 @@ jobs:
           grep -q "MAP_LOADED lvl_forest" /tmp/godot-runtime.log
           echo "Startup and default map load verified."
           set +e
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project -- --audit-all-maps 2>&1 | tee /tmp/map-audit.log
+          /tmp/godot/Godot_v4.5.2-stable_linux.x86_64 --headless --path godot_project -- --audit-all-maps 2>&1 | tee /tmp/map-audit.log
           MAP_AUDIT_STATUS=${PIPESTATUS[0]}
           set -e
           if [ "$MAP_AUDIT_STATUS" -ne 0 ]; then
@@ -201,17 +201,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
-          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -o /tmp/templates.tpz
-          unzip -q /tmp/templates.tpz -d "$HOME/.local/share/godot/export_templates/4.4.1.stable"
-          if [ -d "$HOME/.local/share/godot/export_templates/4.4.1.stable/templates" ]; then
-            cp -a "$HOME/.local/share/godot/export_templates/4.4.1.stable/templates/." "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
-            rm -rf "$HOME/.local/share/godot/export_templates/4.4.1.stable/templates"
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.5.2.stable"
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.2-stable/Godot_v4.5.2-stable_export_templates.tpz -o /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d "$HOME/.local/share/godot/export_templates/4.5.2.stable"
+          if [ -d "$HOME/.local/share/godot/export_templates/4.5.2.stable/templates" ]; then
+            cp -a "$HOME/.local/share/godot/export_templates/4.5.2.stable/templates/." "$HOME/.local/share/godot/export_templates/4.5.2.stable/"
+            rm -rf "$HOME/.local/share/godot/export_templates/4.5.2.stable/templates"
           fi
-          test -s "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk"
-          test -s "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_release.apk"
+          test -s "$HOME/.local/share/godot/export_templates/4.5.2.stable/android_debug.apk"
+          test -s "$HOME/.local/share/godot/export_templates/4.5.2.stable/android_release.apk"
           mkdir -p "$HOME/.config/godot"
-          cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
+          cat > "$HOME/.config/godot/editor_settings-4.5.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
           [resource]
           android/android_sdk_path = "$ANDROID_HOME"
@@ -226,7 +226,7 @@ jobs:
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
           export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
           export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk" 2>&1 | tee /tmp/android-export.log
+          /tmp/godot/Godot_v4.5.2-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk" 2>&1 | tee /tmp/android-export.log
           if grep -Eq "No project icon specified|Failed loading resource|SCRIPT ERROR:|Parse Error:" /tmp/android-export.log; then
             echo "Android export reported a fatal resource or icon warning."
             exit 1
