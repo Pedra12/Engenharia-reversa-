@@ -214,7 +214,31 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
 
 def main():
     data_dir=PROJECT/"data"; meshes=PROJECT/"assets"/"meshes"; textures=PROJECT/"assets"/"textures"
-    for p in (data_dir,meshes,textures): p.mkdir(parents=True,exist_ok=True)
+    combat_assets=PROJECT/"assets"/"combat_source"
+    reference_dir=PROJECT/"reference"
+    for p in (data_dir,meshes,textures,combat_assets,reference_dir): p.mkdir(parents=True,exist_ok=True)
+    source_assets=pathlib.Path("unity_audit")/"source_assets"
+    if not source_assets.is_dir():
+        raise SystemExit("Recovered gameplay asset library missing: "+str(source_assets))
+    shutil.copytree(source_assets,combat_assets,dirs_exist_ok=True)
+    combat_files=list(combat_assets.rglob("*"))
+    required=[
+        combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
+        combat_assets/"meshes"/"UMP_45_2.obj",
+        combat_assets/"textures"/"SimpleMilitary_Soldier01_Black_-6561600483854028127.png",
+        combat_assets/"textures"/"UMP_45_Diffuse_-7805003812694618604.png"
+    ]
+    missing_required=[str(p) for p in required if not p.is_file()]
+    if missing_required:
+        raise SystemExit("Required original combat assets missing: "+", ".join(missing_required))
+    shutil.copytree(pathlib.Path("combat"),PROJECT/"combat",dirs_exist_ok=True)
+    for ref_name in ("source_scripts","UNITY_ANIMATION_DATA.json","UNITY_ANIMATOR_DATA.json","UNITY_SKINNING_DATA.json","GAMEPLAY_ASSET_LIBRARY.csv"):
+        source=pathlib.Path("unity_audit")/ref_name
+        if source.is_dir():
+            shutil.copytree(source,reference_dir/"unity_scripts",dirs_exist_ok=True)
+        elif source.is_file():
+            shutil.copy2(source,reference_dir/source.name)
+    print("COMBAT_SOURCE_ASSETS",sum(1 for p in combat_files if p.is_file()))
     # A real app icon prevents Godot's Android exporter from emitting the
     # missing-project-icon error on every build.
     icon=Image.new("RGBA",(512,512),(8,18,32,255)); draw=ImageDraw.Draw(icon)
@@ -364,8 +388,8 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter=""
-exclude_filter=""
-export_path="build/BlockGunMapsPreview.apk"
+exclude_filter="reference/*"
+export_path="build/BlockGunFlorestaCombat.apk"
 encryption_include_filters=""
 encryption_exclude_filters=""
 encrypt_pck=false
@@ -390,8 +414,8 @@ architectures/x86=false
 architectures/x86_64=false
 version/code=1
 version/name="1.0"
-package/unique_name="com.pedra12.blockgunmaps"
-package/name="Block Gun Map Preview"
+package/unique_name="com.pedra12.blockgunbattle"
+package/name="Block Gun - Combate Floresta"
 package/signed=true
 package/app_category=2
 screen/immersive_mode=true
@@ -423,6 +447,7 @@ var move_vector:=Vector2.ZERO
 var walk_yaw:=0.0
 var walk_pitch:=0.0
 var jump_button:Button
+var combat_session:Node3D
 func _ready():
     _lighting()
     _make_menu()
@@ -479,6 +504,12 @@ func _make_menu():
     play.add_theme_font_size_override("font_size",24)
     play.pressed.connect(_show_map_select)
     home_box.add_child(play)
+    var battle=Button.new()
+    battle.text="INICIAR BATALHA | FLORESTA"
+    battle.custom_minimum_size=Vector2(0,58)
+    battle.add_theme_font_size_override("font_size",19)
+    battle.pressed.connect(_start_combat)
+    home_box.add_child(battle)
     var tutorial=Button.new()
     tutorial.text="COMO JOGAR"
     tutorial.custom_minimum_size.y=48
@@ -585,6 +616,26 @@ func _make_menu():
     jump_button.visible=false
     jump_button.pressed.connect(_request_jump)
     menu.add_child(jump_button)
+func _start_combat():
+    if is_instance_valid(combat_session) or not is_instance_valid(world):
+        return
+    home_panel.visible=false
+    selection_panel.visible=false
+    tutorial_panel.visible=false
+    map_label.visible=false
+    map_actions.visible=false
+    combat_session=Node3D.new()
+    combat_session.name="FlorestaCombatSession"
+    combat_session.set_script(load("res://combat/combat_mode.gd"))
+    add_child(combat_session)
+    combat_session.call_deferred("begin",world,Callable(self,"_end_combat"))
+func _end_combat():
+    if is_instance_valid(combat_session):
+        combat_session.queue_free()
+    combat_session=null
+    if is_instance_valid(camera):
+        camera.current=true
+    _show_home()
 func _show_home():
     _stop_walk_mode()
     home_panel.visible=true
@@ -1305,6 +1356,9 @@ func _lighting():
     sun.light_energy=1.1
     add_child(sun)
 '''
+    gd=gd.replace('    home_box.add_child(play)\\n', '    home_box.add_child(play)\\n    var battle=Button.new()\\n    battle.text="INICIAR BATALHA | FLORESTA"\\n    battle.custom_minimum_size=Vector2(0,58)\\n    battle.add_theme_font_size_override("font_size",19)\\n    battle.pressed.connect(_start_combat)\\n    home_box.add_child(battle)\\n')
+    gd=gd.replace('var jump_button:Button\\nfunc _ready():', 'var jump_button:Button\\nvar combat_session:Node3D\\nfunc _ready():')
+    gd=gd.replace('func _show_home():', 'func _start_combat():\\n    if is_instance_valid(combat_session) or not is_instance_valid(world):\\n        return\\n    home_panel.visible=false\\n    selection_panel.visible=false\\n    tutorial_panel.visible=false\\n    map_label.visible=false\\n    map_actions.visible=false\\n    combat_session=Node3D.new()\\n    combat_session.name="FlorestaCombatSession"\\n    combat_session.set_script(load("res://combat/combat_mode.gd"))\\n    add_child(combat_session)\\n    combat_session.call_deferred("begin",world,Callable(self,"_end_combat"))\\nfunc _end_combat():\\n    if is_instance_valid(combat_session):\\n        combat_session.queue_free()\\n    combat_session=null\\n    if is_instance_valid(camera):\\n        camera.current=true\\n    _show_home()\\nfunc _show_home():')
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
     readme="# Block Gun | Explorador 3D de mapas\n\nAPK de visualização técnica dos nove mapas recuperados do Unity. A câmera enquadra automaticamente a geometria encontrada; arraste com um dedo para orbitar e use pinça para aproximar ou afastar. O botão reenquadra o mapa.\n\nAinda não contém personagem, bots ou gameplay. A completude de cada cenário depende dos modelos e texturas que puderam ser recuperados do arquivo original.\n"
     (PROJECT/"README.md").write_text(readme,encoding="utf-8")
