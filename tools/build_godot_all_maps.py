@@ -4,6 +4,12 @@ import json, pathlib, shutil, re, sys
 from PIL import Image, ImageDraw, ImageChops, ImageEnhance, ImageOps
 ROOT=pathlib.Path("scene_graph"); PROJECT=pathlib.Path("godot_project")
 MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
+requested_map=None
+if len(sys.argv)>1:
+    if len(sys.argv)!=3 or sys.argv[1]!="--only-map" or sys.argv[2] not in MAPS:
+        raise SystemExit("Usage: build_godot_all_maps.py [--only-map lvl_india]")
+    requested_map=sys.argv[2]
+MAPS_TO_BUILD=[requested_map] if requested_map else MAPS
 names={"lvl_baghdad":"Baghdad","lvl_assault":"Assalto","lvl_middle_east":"Oriente Médio","lvl_resort":"Resort","lvl_forest":"Floresta","lvl_house":"Casa","lvl_india":"Índia","lvl_rome":"Roma","lvl_deluxe_fest":"Festival Deluxe"}
 def slice_obj(source:pathlib.Path,destination:pathlib.Path,first:int,count:int):
     """Keep only the Unity static-batch submeshes assigned to one renderer."""
@@ -163,7 +169,13 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
     remap={old:new for new,old in enumerate(used)}
     pos=np.asarray(positions,dtype=np.float32)[used]
     nrm=np.asarray(normals,dtype=np.float32)[used]
-    tex=np.asarray(texcoords,dtype=np.float32)[used]
+    obj_uv=np.asarray(texcoords,dtype=np.float32)
+    uv0_delta=float(np.max(np.abs(obj_uv-uv0))) if obj_uv.size else float("inf")
+    if not np.isfinite(uv0_delta):
+        raise ValueError(f"India OBJ UV0 comparison is not finite: ${obj_path.name}")
+    # Unity serialized m_UV0 is authoritative. Keep its values aligned with
+    # the original Unity vertex indices referenced by selected faces.
+    tex=uv0[used].astype(np.float32,copy=True)
     col=colors[used]
     if not np.isfinite(pos).all() or not np.isfinite(nrm).all() or not np.isfinite(tex).all() or not np.isfinite(col).all():
         raise ValueError(f"Non-finite India mesh data: {obj_path.name}")
@@ -197,7 +209,7 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         if len(indices)==0: continue
         index_view=add_view(indices.astype("<u4").tobytes(),34963)
         index_acc=add_accessor(index_view,5125,len(indices),"SCALAR",int(indices.min()),int(indices.max()))
-        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"material":0,"mode":4})
+        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"mode":4})
         triangle_count+=len(indices)//3
     if not primitives: raise ValueError(f"No India GLB primitives generated: {obj_path.name}")
 
@@ -205,10 +217,11 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
     # unnecessary here and causes null-texture errors in Godot's headless importer.
     # Keep the GLB material texture-free; the exact Unity atlas is applied later
     # by the map material loader.
+    # No GLTF material is embedded. The runtime binds the exact Unity
+    # Material and Texture2D references from the India scene manifest.
     gltf={"asset":{"version":"2.0","generator":"BlockGun India offline lightmap baker"},
           "scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
           "meshes":[{"primitives":primitives}],
-          "materials":[{"name":"India baked lightmap vertex colors","pbrMetallicRoughness":{"baseColorFactor":[1.0,1.0,1.0,1.0],"metallicFactor":0.0,"roughnessFactor":1.0}}],
           "buffers":[{"byteLength":len(binary)}],"bufferViews":views,"accessors":accessors}
     json_chunk=json.dumps(gltf,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     while len(json_chunk)%4: json_chunk+=b" "
@@ -233,7 +246,7 @@ def main():
     draw.rectangle((228,235,263,270),fill=(54,190,235,255))
     icon.save(PROJECT/"icon.png")
     all_meshes=set(); all_textures=set(); catalog=[]
-    for mapid in MAPS:
+    for mapid in MAPS_TO_BUILD:
         path=ROOT/"maps"/(mapid+".json")
         if not path.exists(): raise SystemExit("Manifest missing: "+str(path))
         d=json.loads(path.read_text(encoding="utf-8")); copied=set(); tex=set(); missing=[]
@@ -266,15 +279,13 @@ def main():
                             src=ROOT/png
                             original_name=pathlib.Path(png).name
                             india_atlas=(mapid=="lvl_india" and original_name=="sharedassets1.assets__65__t_atlas_environment.png")
-                            output_name=("india_detail_"+original_name) if india_atlas else original_name
+                            # Preserve the exact exported Unity Texture2D bytes.
+                            output_name=original_name
                             dst=textures/output_name
                             if src.exists():
                                 if dst.name not in all_textures:
-                                    if india_atlas: enhance_india_atlas(src,dst)
-                                    else: shutil.copy2(src,dst)
+                                    shutil.copy2(src,dst)
                                     all_textures.add(dst.name)
-                                if india_atlas:
-                                    texture["exported_png"]=output_name
                                 # Record the exact Godot resource path derived from
                                 # this Unity Material's serialized Texture2D reference.
                                 texture["godot_texture_path"]="res://assets/textures/"+output_name
@@ -361,7 +372,13 @@ def main():
         walk(d["root"])
         (data_dir/(mapid+".json")).write_text(json.dumps(d,ensure_ascii=False),encoding="utf-8")
         catalog.append({"id":mapid,"name":names[mapid],"nodes":d.get("node_count",0),"meshes":len(copied),"textures":len(tex),"missing":len(missing),"india_lightmap_bakes":india_lightmap_bakes})
-    (data_dir/"maps.json").write_text(json.dumps(catalog,ensure_ascii=False,indent=2),encoding="utf-8")
+    catalog_path=data_dir/"maps.json"
+    if requested_map and catalog_path.exists():
+        existing=json.loads(catalog_path.read_text(encoding="utf-8"))
+        by_id={entry.get("id"):entry for entry in existing if isinstance(entry,dict)}
+        by_id.update({entry.get("id"):entry for entry in catalog})
+        catalog=[by_id[mid] for mid in MAPS if mid in by_id]
+    catalog_path.write_text(json.dumps(catalog,ensure_ascii=False,indent=2),encoding="utf-8")
     (PROJECT/"project.godot").write_text('''config_version=5
 [application]
 config/name="Block Gun - Mapas Recuperados"
