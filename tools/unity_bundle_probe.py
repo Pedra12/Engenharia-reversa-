@@ -217,7 +217,10 @@ def main():
         def process_type(typ,ids):
             label=safe(typ+"_"+str(len(worker_logs)))
             worker_dir=final_dir/("_worker_"+label);worker_dir.mkdir(parents=True,exist_ok=True)
-            result=run_child(bundle,worker_dir,"worker",[typ],ids)
+            # Keep large path-ID lists out of argv; a type-only pass is safe and
+            # falls back to bisection if one serialized object crashes UnityPy.
+            worker_ids=ids if len(ids)<=1000 else []
+            result=run_child(bundle,worker_dir,"worker",[typ],worker_ids)
             worker_logs.append({"type":typ,"ids":len(ids),"returncode":result.returncode,"log":result.stdout[-1000:]})
             if result.returncode==0 and (worker_dir/"objects.json").exists():
                 merge_worker(worker_dir,final_dir,all_rows);return
