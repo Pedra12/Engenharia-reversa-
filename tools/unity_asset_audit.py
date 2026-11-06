@@ -130,15 +130,24 @@ def main():
                             b=src.read(1024*1024)
                             if not b: break
                             out.write(b)
-            # Recover all Unity Addressables/AssetBundle containers, not only the legacy unity/assets folder.
+            # Copy valid UnityFS/UnityWeb/UnityRaw bundles outside the base asset root.
+            # They are probed one-by-one later; bulk-loading unrelated Android files can crash UnityPy.
             bundle_exts=(".bundle",".unity3d",".assetbundle",".ab")
             bundle_markers=("/aa/android/","/assetbundles/","/streamingassets/")
-            bundle_names=[n for n in names if n.lower().endswith(bundle_exts) or
-                          (any(marker in n.lower() for marker in bundle_markers) and not n.endswith("/"))]
             bundle_manifest=[]
-            for n in sorted(bundle_names):
+            for n in sorted(x for x in names if not x.endswith("/")):
+                low=n.lower()
+                explicit=low.endswith(bundle_exts)
+                if not explicit and not any(marker in low for marker in bundle_markers):
+                    continue
+                try:
+                    with z.open(n) as src: header=src.read(32)
+                except Exception: continue
+                magic=next((m.decode("ascii") for m in (b"UnityFS",b"UnityWeb",b"UnityRaw",b"UnityArchive",b"CAB-") if header.startswith(m)), "")
+                if not explicit and not magic:
+                    continue
                 rel=PurePosixPath(n)
-                dest=root/"bundles"/(safe(rel.parent.name)+"_"+safe(rel.name))
+                dest=OUT/"bundle_candidates"/(safe(rel.parent.name)+"_"+safe(rel.name))
                 dest.parent.mkdir(parents=True,exist_ok=True)
                 with z.open(n) as src, open(dest,"wb") as out:
                     total=0
@@ -146,10 +155,10 @@ def main():
                         b=src.read(1024*1024)
                         if not b: break
                         out.write(b); total+=len(b)
-                bundle_manifest.append({"archive_path":n,"extracted_path":str(dest.relative_to(root)),"size":total})
+                bundle_manifest.append({"archive_path":n,"extracted_path":str(dest.relative_to(OUT)),"size":total,"magic":magic or "extension"})
             with open(OUT/"ARCHIVE_BUNDLE_CANDIDATES.csv","w",newline="",encoding="utf-8") as fh:
-                w=csv.DictWriter(fh,fieldnames=["archive_path","extracted_path","size"]);w.writeheader();w.writerows(bundle_manifest)
-            print("REASSEMBLED",len(assembled),"BUNDLES",len(bundle_names),"BUNDLE_BYTES",sum(x["size"] for x in bundle_manifest))
+                w=csv.DictWriter(fh,fieldnames=["archive_path","extracted_path","size","magic"]);w.writeheader();w.writerows(bundle_manifest)
+            print("REASSEMBLED",len(assembled),"BUNDLE_CANDIDATES",len(bundle_manifest),"BUNDLE_BYTES",sum(x["size"] for x in bundle_manifest))
             env=UnityPy.load(str(root))
             objects=list(env.objects)
             print("UNITY_OBJECTS",len(objects))
