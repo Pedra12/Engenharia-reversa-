@@ -18,30 +18,35 @@ old_loop = """            for surface_index in range(mi.mesh.get_surface_count()
                         mi.set_surface_override_material(surface_index,surface_material)
 """
 new_loop = """            for surface_index in range(mi.mesh.get_surface_count()):
-                if mats.size()>0:
-                    var material_start=int(d.get("godot_material_start_index",0))
-                    var material_index=min(material_start+surface_index,mats.size()-1)
-                    var recovered_material=_mat([mats[material_index]],String(d.get("name","")))
-                    if recovered_material:
-                        # Keep the imported GLB/OBJ material settings and replace
-                        # only the albedo texture recovered from the exact Unity ref.
-                        var embedded_material=mi.mesh.surface_get_material(surface_index)
-                        if embedded_material is StandardMaterial3D and recovered_material is StandardMaterial3D:
-                            var combined_material=(embedded_material as StandardMaterial3D).duplicate() as StandardMaterial3D
-                            var recovered_standard=recovered_material as StandardMaterial3D
-                            if recovered_standard.albedo_texture:
-                                combined_material.albedo_texture=recovered_standard.albedo_texture
-                            if recovered_standard.transparency!=BaseMaterial3D.TRANSPARENCY_DISABLED:
-                                combined_material.transparency=recovered_standard.transparency
-                            if recovered_standard.cull_mode!=BaseMaterial3D.CULL_BACK:
-                                combined_material.cull_mode=recovered_standard.cull_mode
-                            if bool(d.get("godot_lightmap_vertex_colors",false)):
-                                combined_material.vertex_color_use_as_albedo=true
-                            mi.set_surface_override_material(surface_index,combined_material)
-                        else:
-                            if bool(d.get("godot_lightmap_vertex_colors",false)) and recovered_material is StandardMaterial3D:
-                                (recovered_material as StandardMaterial3D).vertex_color_use_as_albedo=true
-                            mi.set_surface_override_material(surface_index,recovered_material)
+                if mats.is_empty():
+                    continue
+                var material_start=int(d.get("godot_material_start_index",0))
+                var material_index=material_start+surface_index
+                # Never clamp an invalid Unity slot to the last material.
+                # That silently paints unrelated tank/crate submeshes with wrong colors.
+                if material_index<0 or material_index>=mats.size():
+                    push_warning("UNITY_MATERIAL_SLOT_MISSING node="+String(d.get("name",""))+" surface="+str(surface_index)+" slot="+str(material_index)+" materials="+str(mats.size()))
+                    continue
+                var embedded_material=mi.mesh.surface_get_material(surface_index)
+                var keep_embedded=false
+                if embedded_material is StandardMaterial3D:
+                    var embedded_standard=embedded_material as StandardMaterial3D
+                    keep_embedded=embedded_standard.albedo_texture!=null
+                    # India lightmap GLB keeps its embedded texture; only duplicate
+                    # it to enable vertex-color lighting when that flag is present.
+                    if keep_embedded and bool(d.get("godot_lightmap_vertex_colors",false)):
+                        var lightmapped_material=embedded_standard.duplicate() as StandardMaterial3D
+                        lightmapped_material.vertex_color_use_as_albedo=true
+                        mi.set_surface_override_material(surface_index,lightmapped_material)
+                elif embedded_material!=null:
+                    keep_embedded=true
+                if keep_embedded:
+                    continue
+                var recovered_material=_mat([mats[material_index]],String(d.get("name","")))
+                if recovered_material:
+                    if bool(d.get("godot_lightmap_vertex_colors",false)) and recovered_material is StandardMaterial3D:
+                        (recovered_material as StandardMaterial3D).vertex_color_use_as_albedo=true
+                    mi.set_surface_override_material(surface_index,recovered_material)
 """
 if source.count(old_loop) != 1:
     raise SystemExit(f"Expected exactly one material override loop, found {source.count(old_loop)}")
