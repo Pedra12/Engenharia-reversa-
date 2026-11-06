@@ -231,6 +231,31 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         out.write(struct.pack("<4sII",b"glTF",2,total))
         out.write(struct.pack("<I4s",len(json_chunk),b"JSON")); out.write(json_chunk)
         out.write(struct.pack("<I4s",len(binary),b"BIN\x00")); out.write(binary)
+    blob=output_path.read_bytes()
+    if len(blob)<20 or blob[:4]!=b"glTF" or struct.unpack_from("<I",blob,4)[0]!=2 or struct.unpack_from("<I",blob,8)[0]!=len(blob):
+        raise ValueError(f"India GLB header/length invalid: ${output_path.name}")
+    json_size=struct.unpack_from("<I",blob,12)[0]
+    if blob[16:20]!=b"JSON" or 20+json_size+8>len(blob):
+        raise ValueError(f"India GLB JSON chunk invalid: ${output_path.name}")
+    verified=json.loads(blob[20:20+json_size].decode("utf-8").rstrip(" \\t\\r\\n"))
+    bin_header=20+json_size
+    bin_size=struct.unpack_from("<I",blob,bin_header)[0]
+    if blob[bin_header+4:bin_header+8]!=b"BIN\\x00" or bin_header+8+bin_size!=len(blob):
+        raise ValueError(f"India GLB BIN chunk invalid: ${output_path.name}")
+    if verified.get("materials") or any("material" in p for m in verified.get("meshes",[]) for p in m.get("primitives",[])):
+        raise ValueError(f"India GLB contains an importer-side material: ${output_path.name}")
+    for view in verified.get("bufferViews",[]):
+        if int(view.get("byteOffset",0))+int(view.get("byteLength",0))>bin_size:
+            raise ValueError(f"India GLB bufferView exceeds BIN chunk: ${output_path.name}")
+    for mesh in verified.get("meshes",[]):
+        for primitive in mesh.get("primitives",[]):
+            attrs=primitive.get("attributes",{})
+            if not all(k in attrs for k in ("POSITION","NORMAL","TEXCOORD_0","COLOR_0")):
+                raise ValueError(f"India GLB missing required vertex channel: ${output_path.name}")
+            index_accessor=verified["accessors"][primitive["indices"]]
+            if int(index_accessor.get("max",0))>=len(used):
+                raise ValueError(f"India GLB index exceeds vertex count: ${output_path.name}")
+    print(f"INDIA_GLB_INTEGRITY_OK file={output_path.name} bytes={len(blob)} uv0_obj_delta={uv0_delta:.8f} materials=0")
     print(f"INDIA_LIGHTMAP_GLB_OK mesh={obj_path.name} vertices={len(used)} triangles={triangle_count} primitives={len(primitives)} lightmap={lightmap_path.name} output={output_path.name}")
     return {"file":output_path.name,"vertices":len(used),"triangles":triangle_count,"primitives":len(primitives)}
 
