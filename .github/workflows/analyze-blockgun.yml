@@ -81,6 +81,40 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check Pillow
       - name: Generate Godot project with all recovered maps
         run: python3 tools/build_godot_all_maps.py
+      - name: Rebuild India assets in an isolated conversion pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_godot_all_maps.py --only-map lvl_india | tee /tmp/india-only-build.log
+          test "$(grep -c 'INDIA_GLB_INTEGRITY_OK' /tmp/india-only-build.log)" -eq 3
+          python3 - <<'PY'
+          import json, pathlib, hashlib
+          manifest=json.loads(pathlib.Path("godot_project/data/lvl_india.json").read_text())
+          source_root=pathlib.Path("scene_graph")
+          godot_root=pathlib.Path("godot_project")
+          checked=0
+          def walk(node):
+              global checked
+              for component in node.get("components",[]):
+                  if component.get("type")=="MeshRenderer":
+                      for material in component.get("material_resources",[]):
+                          for texture in material.get("textures",[]):
+                              rel=texture.get("exported_png","")
+                              resource=texture.get("godot_texture_path","")
+                              if not rel or not resource.startswith("res://assets/textures/"):
+                                  raise SystemExit("India texture reference is incomplete: "+str(texture))
+                              source=source_root/rel
+                              target=godot_root/resource.removeprefix("res://")
+                              if not source.is_file() or not target.is_file():
+                                  raise SystemExit("India source/target texture missing: "+str(source)+" -> "+str(target))
+                              if hashlib.sha256(source.read_bytes()).digest()!=hashlib.sha256(target.read_bytes()).digest():
+                                  raise SystemExit("India texture bytes differ from original Unity export: "+str(rel))
+                              checked+=1
+              for child in node.get("children",[]): walk(child)
+          walk(manifest["root"])
+          if checked==0: raise SystemExit("No original India material textures were verified")
+          print("INDIA_SOURCE_TEXTURES_EXACT_OK references="+str(checked))
+          PY
       - name: Preserve imported materials and apply exact recovered texture overrides
         run: python3 tools/patch_godot_materials.py
       - name: Audit every map assets, interiors and stair candidates
@@ -106,8 +140,8 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot
           chmod +x /tmp/godot/Godot_v4.4.1-stable_linux.x86_64
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --path godot_project --import --quit 2>&1 | tee /tmp/godot-import.log
-          if grep -Eq "Failed loading resource|SCRIPT ERROR:|Parse Error:" /tmp/godot-import.log; then
-            echo "One or more project resources failed to import."
+          if grep -Eq 'Failed loading resource|SCRIPT ERROR:|Parse Error:|Parameter "t" is null|INDIA_TEXTURE_RESOURCE_MISSING' /tmp/godot-import.log; then
+            echo "Godot import reported a resource, script, or null-texture failure."
             exit 1
           fi
           set +e
