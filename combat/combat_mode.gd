@@ -161,7 +161,7 @@ func _create_player() -> void:
 		})
 		player_animation_player.setup(player_fp_rig["skeleton"], hand_retarget)
 		if player_animation_player.has_clip("Rifle_Idle_gun_down"):
-			player_animation_player.play("Rifle_Idle_gun_down")
+			player_animation_player.play("Rifle_Idle_gun_down", 0.14, 1.0, true)
 		else:
 			player_animation_player.play("Idle")
 		player_weapon_attachment = rig_loader.create_bone_attachment(player_fp_rig["skeleton"], "DEF-hand.R", "OriginalWeaponSocket")
@@ -375,7 +375,7 @@ func _physics_process(delta: float) -> void:
 			desired_animation = "Idle"
 		if desired_animation != current_player_animation:
 			current_player_animation = desired_animation
-			player_animation_player.play(desired_animation, 0.14, 1.0)
+			player_animation_player.play(desired_animation, 0.14, 1.0, true)
 	if direction.length() > 0.15:
 		footstep_timer -= delta
 		if footstep_timer <= 0.0 and grass_player and not grass_player.playing:
