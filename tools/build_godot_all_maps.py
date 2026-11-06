@@ -245,11 +245,23 @@ def main():
     missing_ui=[suffix for suffix in required_original_textures if not list((original_assets/"textures").glob("*_"+suffix))]
     if missing_ui:
         raise SystemExit("Original combat UI/arm textures missing by asset name: "+", ".join(missing_ui))
-    for ref_name in ("UNITY_SCENE_OBJECTS.json","UNITY_RIG_HIERARCHY.json","UNITY_ASSET_AUDIT.json","UNITY_MATERIAL_PROPERTIES.json","UNITY_OBJECT_CATALOG.csv"):
+    for ref_name in ("UNITY_SCENE_OBJECTS.json","UNITY_RIG_HIERARCHY.json","UNITY_HUD_LAYOUT.json","UNITY_ASSET_AUDIT.json","UNITY_MATERIAL_PROPERTIES.json","UNITY_OBJECT_CATALOG.csv"):
         source=pathlib.Path("unity_audit")/ref_name
         if source.is_file():
             shutil.copy2(source,reference_dir/source.name)
     subprocess.run([sys.executable,"tools/convert_unity_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    hud_layout=pathlib.Path("unity_audit")/"UNITY_HUD_LAYOUT.json"
+    if hud_layout.is_file():
+        shutil.copy2(hud_layout,combat_assets/"original_hud_layout.json")
+    bundle_probe=pathlib.Path("unity_audit")/"bundle_probe"
+    if bundle_probe.is_dir():
+        shutil.copytree(bundle_probe,reference_dir/"bundle_probe",dirs_exist_ok=True)
+        for bundle_dir in bundle_probe.iterdir():
+            if not bundle_dir.is_dir() or bundle_dir.name=="failed_bundles": continue
+            for kind in ("meshes","textures","audio"):
+                src=bundle_dir/kind
+                if src.is_dir():
+                    shutil.copytree(src,original_assets/"bundle_assets"/bundle_dir.name/kind,dirs_exist_ok=True)
     combat_files=list(combat_assets.rglob("*"))
     required=[
         combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
