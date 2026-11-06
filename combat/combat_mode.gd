@@ -460,6 +460,15 @@ func _update_hud() -> void:
 	if is_instance_valid(kills_label):
 		kills_label.text = "ELIMINAÇÕES %d" % kills
 
+func shutdown() -> void:
+	if is_instance_valid(player):
+		player.queue_free()
+	if is_instance_valid(map_root):
+		for bot in map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false):
+			bot.queue_free()
+	if is_instance_valid(camera):
+		camera.current = false
+
 func _exit_combat() -> void:
 	if return_callback.is_valid():
 		return_callback.call()
