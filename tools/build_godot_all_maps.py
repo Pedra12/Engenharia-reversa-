@@ -1357,7 +1357,7 @@ func _lighting():
     add_child(sun)
 '''
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
-    readme="# Block Gun | Explorador 3D de mapas\n\nAPK de visualização técnica dos nove mapas recuperados do Unity. A câmera enquadra automaticamente a geometria encontrada; arraste com um dedo para orbitar e use pinça para aproximar ou afastar. O botão reenquadra o mapa.\n\nAinda não contém personagem, bots ou gameplay. A completude de cada cenário depende dos modelos e texturas que puderam ser recuperados do arquivo original.\n"
+    readme="# Block Gun | Combate na Floresta\\n\\nProtótipo Android de combate local construído com recursos recuperados do pacote Unity: soldado, UMP45, texturas, sons e mapa Floresta. Inclui joystick, câmera por toque, mira, tiro, recarga, pulo, vida, dano, eliminações, bots e retorno após eliminação. Os dados e scripts de referência Unity permanecem em reference/ e são excluídos do APK.\\n\\nOs OBJ de personagem atualmente exportados não preservam pesos de skinning utilizáveis. A animação esquelética original exige reconstrução do rig e associação dos clips, sem substituir o personagem por um modelo genérico.\\n"
     (PROJECT/"README.md").write_text(readme,encoding="utf-8")
     print("GODOT_ALL_MAPS",len(catalog),"MESHES",len(all_meshes),"TEXTURES",len(all_textures))
     for m in catalog: print(m)
