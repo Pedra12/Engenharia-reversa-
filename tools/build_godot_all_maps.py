@@ -332,10 +332,11 @@ def main():
                 result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count,lightmap_st)
                 n["godot_render_obj"]=glb_name
                 n["godot_lightmap_vertex_colors"]=True
-                # GLB primitives are sliced from the original Unity static-batch
-                # submesh range. Preserve the original material-array offset so
-                # each surface receives its matching Unity material, not mats[0].
-                n["godot_material_start_index"]=first if count>0 else 0
+                # Static-batch first_sub_mesh selects a range in the combined
+                # source mesh, not an offset in this renderer's m_Materials array.
+                # The sliced GLB starts at local surface zero, so material slots
+                # must also start at zero for this renderer.
+                n["godot_material_start_index"]=0
                 all_meshes.add(glb_name); copied.add(glb_name)
                 india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,"lightmap_st":lightmap_st,**result})
             n["godot_materials"]=mats
