@@ -40,6 +40,7 @@ var fire_cooldown := 0.0
 var reload_timer := 0.0
 var footstep_timer := 0.0
 var aiming := false
+var fire_held := false
 var dead_timer := 0.0
 var spawn_position := Vector3.ZERO
 var grass_player: AudioStreamPlayer3D
@@ -224,11 +225,13 @@ func _build_hud() -> void:
 	joystick_bg = Panel.new()
 	joystick_bg.position = Vector2(42, screen.y - 192)
 	joystick_bg.size = Vector2(142, 142)
+	joystick_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_panel(joystick_bg, Color(0.08, 0.12, 0.16, 0.46), 72)
 	hud.add_child(joystick_bg)
 	joystick_knob = Panel.new()
 	joystick_knob.position = Vector2(48, 48)
 	joystick_knob.size = Vector2(46, 46)
+	joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_panel(joystick_knob, Color(0.62, 0.78, 0.88, 0.72), 24)
 	joystick_bg.add_child(joystick_knob)
 	_make_button("TIRO", Vector2(-130, -236), Vector2(112, 68), _fire)
@@ -274,6 +277,9 @@ func _make_button(value: String, offset: Vector2, dimensions: Vector2, callback:
 	button.add_theme_font_size_override("font_size", 16)
 	button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0))
 	button.pressed.connect(callback)
+	if value == "TIRO":
+		button.button_down.connect(func(): fire_held = true)
+		button.button_up.connect(func(): fire_held = false)
 	hud.add_child(button)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -318,6 +324,8 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
+	if fire_held and fire_cooldown <= 0.0:
+		_fire()
 	if reload_timer > 0.0:
 		reload_timer -= delta
 		if reload_timer <= 0.0:
@@ -389,8 +397,6 @@ func _fire() -> void:
 			if headshot:
 				status_label.text = "TIRO NA CABEÇA"
 			if killed:
-				kills += 1
-				kills_label.text = "ELIMINAÇÕES %d" % kills
 				status_label.text = "ALVO ELIMINADO"
 	_update_hud()
 
