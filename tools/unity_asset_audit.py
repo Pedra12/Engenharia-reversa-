@@ -140,7 +140,8 @@ def main():
                             "m_EnableInstancing","m_DoubleSidedGI","m_ValidKeywords",
                             "m_InvalidKeywords","m_LightmapFlags","m_Flags"
                         ])
-                        row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]\n                        row["unity_uv_transforms"]=json.dumps(unity_material_uv(data),ensure_ascii=False)
+                        row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]
+                        row["unity_uv_transforms"]=json.dumps(unity_material_uv(data),ensure_ascii=False)
                         material_records.append({"source":source,"path_id":str(pid),"name":str(name),"serialized":material_fields})
                         try:
                             shader=getattr(data,"m_Shader",None)
