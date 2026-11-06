@@ -254,7 +254,13 @@ def main():
                     lightmap_index=comp.get("m_LightmapIndex")
                     lightmap_st=(comp.get("m_LightmapTilingOffset") or comp.get("m_LightmapST") or comp.get("m_LightmapScaleOffset"))
                 for material in comp.get("material_resources",[]):
+                    # Match Unity TexEnv by Texture2D path ID and retain its atlas transform.
+                    uv_entries=material.get("unity_uv_transforms",[])
                     for texture in material.get("textures",[]):
+                        texture_pid=int(texture.get("path_id",0) or 0)
+                        uv_match=next((u for u in uv_entries if int(u.get("texture_path_id",0) or 0)==texture_pid),None)
+                        if uv_match:
+                            texture["unity_uv_transform"]={"Mscale":uv_match.get("Mscale",{"x":1.0,"y":1.0}),"Moffset":uv_match.get("Moffset",{"x":0.0,"y":0.0}),"property":uv_match.get("property","")}
                         png=texture.get("exported_png")
                         if png:
                             src=ROOT/png
@@ -797,6 +803,13 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
             var tx=load(texture_path) as Texture2D
             if tx:
                 sm.albedo_texture=tx
+                # Unity atlas transform recovered from Material.m_SavedProperties.
+                var uv:Dictionary=t.get("unity_uv_transform",{})
+                var sc:Dictionary=uv.get("Mscale",{})
+                var of:Dictionary=uv.get("Moffset",{})
+                sm.uv1_scale=Vector3(float(sc.get("x",1.0)),float(sc.get("y",1.0)),1.0)
+                sm.uv1_offset=Vector3(float(of.get("x",0.0)),float(of.get("y",0.0)),0.0)
+                print("UNITY_ATLAS_UV material=",material_name," scale=",sm.uv1_scale," offset=",sm.uv1_offset)
                 break
     # Shader/material behavior follows the recovered Unity Material name/reference,
     # never a guessed object-name category.
