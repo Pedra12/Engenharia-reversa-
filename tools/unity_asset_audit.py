@@ -129,6 +129,7 @@ def main():
                     base=safe(pathlib.Path(source).stem)+"_"+safe(typ)+"_"+safe(name or pid)
                     if typ=="Mesh" and (str(name).startswith("sk_char_") or str(name) in ("sk_gloves","sk_bomb_fp")):
                         skin_records.append({"source":source,"path_id":str(pid),"name":str(name),
+                          "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
                           "fields":selected_fields(data,["m_Vertices","m_Normals","m_UV0","m_UV1","m_Skin","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_SubMeshes","m_Indices","m_VertexData","m_CompressedMesh"])})
                     elif typ=="AnimationClip":
                         animation_records.append({"source":source,"path_id":str(pid),"name":str(name),
@@ -157,6 +158,7 @@ def main():
                           "Camera":["m_GameObject","m_Enabled","m_FieldOfView","m_NearClipPlane","m_FarClipPlane"]
                         }
                         record={"source":source,"path_id":str(pid),"type":typ,"name":str(name)[:250],
+                                "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
                                 "fields":selected_fields(data,fields_by_type.get(typ,[]))}
                         if typ=="MonoBehaviour":
                             try: record["serialized_fields"]=json_safe(obj.read_typetree())
