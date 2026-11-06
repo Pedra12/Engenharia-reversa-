@@ -36,6 +36,18 @@ def selected_fields(data, names):
             try: out[name]=json_safe(getattr(data,name))
             except Exception as e: out[name]={"error":str(e)[:200]}
     return out
+
+def unity_material_uv(data):
+ """Explicit Unity Material texture atlas transforms from m_SavedProperties.m_TexEnvs."""
+ saved=getattr(data,"m_SavedProperties",None); envs=getattr(saved,"m_TexEnvs",[]) or []; result=[]
+ for entry in envs:
+  key=getattr(entry,"first",None); value=getattr(entry,"second",None)
+  if value is None and isinstance(entry,(list,tuple)) and len(entry)>=2: key,value=entry[0],entry[1]
+  if value is None: continue
+  scale=getattr(value,"m_Scale",None); offset=getattr(value,"m_Offset",None); tex=getattr(value,"m_Texture",None)
+  result.append({"property":str(key or ""),"Mscale":{"x":float(getattr(scale,"x",1.0)),"y":float(getattr(scale,"y",1.0))},"Moffset":{"x":float(getattr(offset,"x",0.0)),"y":float(getattr(offset,"y",0.0))},"texture_path_id":int(getattr(tex,"path_id",0) or 0)})
+ return result
+
 def main():
     import UnityPy
     from PIL import Image, ImageDraw
@@ -128,7 +140,7 @@ def main():
                             "m_EnableInstancing","m_DoubleSidedGI","m_ValidKeywords",
                             "m_InvalidKeywords","m_LightmapFlags","m_Flags"
                         ])
-                        row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]
+                        row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]\n                        row["unity_uv_transforms"]=json.dumps(unity_material_uv(data),ensure_ascii=False)
                         material_records.append({"source":source,"path_id":str(pid),"name":str(name),"serialized":material_fields})
                         try:
                             shader=getattr(data,"m_Shader",None)
