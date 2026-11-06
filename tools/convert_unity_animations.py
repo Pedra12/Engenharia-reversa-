@@ -31,6 +31,10 @@ def axis_angle(vec):
     s=math.sin(angle*0.5)/angle
     return [vec[0]*s,vec[1]*s,vec[2]*s,math.cos(angle*0.5)]
 
+def quat_to_godot(q):
+    # UnityPy's OBJ exporter mirrors X. Convert matching rotations by S*R*S.
+    return [q[0],-q[1],-q[2],q[3]]
+
 def muscle_axes():
     axes={"spine_01.x":(2,1,0),"spine_02.x":(5,4,3),"spine_03.x":(8,7,6),
           "neck.x":(11,10,9),"head.x":(14,13,12)}
@@ -168,6 +172,7 @@ def convert_clip(record,avatar_fields,full_index,full_pose,human_skeleton,human_
             else:
                 absolute=rest_q
             pose_delta=qnorm(qmul(qinv(rest_q),qnorm(absolute)))
+            pose_delta=quat_to_godot(pose_delta)
             rotations.append([full_bone,*pose_delta])
         frames.append(rotations)
     settings=fields.get("m_AnimationClipSettings",{})
