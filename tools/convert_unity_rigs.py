@@ -135,9 +135,10 @@ def build_rig(mesh_record,avatar_record,rig_hierarchy,mesh_path,texture_paths):
     if len(bindposes)!=len(mesh_bone_to_avatar):
         raise ValueError(f"{mesh_record['name']}: bind pose count {len(bindposes)} != mesh bone count {len(mesh_bone_to_avatar)}")
     vertex_count,weights,bone_indices=decode_skin(f)
-    for row in bone_indices:
-        for b,w in zip(row,weights[bone_indices.index(row)] if False else [1,1,1,1]):
-            if b>=len(hashes): raise ValueError(f"{mesh_record['name']}: vertex bone index {b} exceeds {len(hashes)}")
+    for row, weight_row in zip(bone_indices,weights):
+        for b,w in zip(row,weight_row):
+            if w>1e-6 and b>=len(hashes):
+                raise ValueError(f"{mesh_record['name']}: weighted vertex bone index {b} exceeds {len(hashes)}")
     surfaces=parse_obj(mesh_path,weights,bone_indices,vertex_count)
     renderer=next((x for x in rig_hierarchy.get("renderers",[]) if x.get("mesh_name")==mesh_record["name"]),None)
     mesh_tr=renderer.get("mesh_transform") if renderer else None
