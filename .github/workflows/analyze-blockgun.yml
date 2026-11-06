@@ -77,6 +77,7 @@ jobs:
             unity_audit/UNITY_ANIMATOR_DATA.json
             unity_audit/UNITY_OBJECT_CATALOG.csv
             unity_audit/UNITY_MATERIAL_PROPERTIES.json
+            unity_audit/ARCHIVE_BUNDLE_CANDIDATES.csv
             unity_audit/exported/meshes/*_Mesh_sk_char_sold_male_01.obj
             unity_audit/exported/meshes/*_Mesh_sk_bomb_fp.obj
             unity_audit/exported/meshes/*_Mesh_sk_gloves.obj
