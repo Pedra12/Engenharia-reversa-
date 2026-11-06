@@ -167,22 +167,26 @@ def main():
                     elif typ=="Avatar":
                         avatar_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_Avatar","m_TOS","m_Name"])})
-                    scene_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera")
+                    scene_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification")
                     if typ in scene_types:
                         fields_by_type={
-                          "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name"],
-                          "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale"],
-                          "RectTransform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_AnchorMin","m_AnchorMax","m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_Pivot"],
+                          "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject","m_PrefabInternal","m_PrefabParentObject"],
+                          "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
+                          "RectTransform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_AnchorMin","m_AnchorMax","m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_Pivot","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
                           "Canvas":["m_GameObject","m_Enabled","m_RenderMode","m_Camera","m_SortingOrder","m_TargetDisplay"],
                           "CanvasRenderer":["m_GameObject","m_CullTransparentMesh"],
-                          "MonoBehaviour":["m_GameObject","m_Enabled","m_Script"],
+                          "CanvasGroup":["m_GameObject","m_Enabled","m_Alpha","m_Interactable","m_BlocksRaycasts"],
+                          "MonoBehaviour":["m_GameObject","m_Enabled","m_Script","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
                           "MeshFilter":["m_GameObject","m_Mesh"],
                           "MeshRenderer":["m_GameObject","m_Enabled","m_Materials"],
                           "SkinnedMeshRenderer":["m_GameObject","m_Enabled","m_Materials","m_Mesh","m_Bones","m_RootBone","m_LocalAABB"],
                           "Animator":["m_GameObject","m_Enabled","m_Avatar","m_Controller","m_ApplyRootMotion","m_UpdateMode","m_CullingMode"],
                           "SpriteRenderer":["m_GameObject","m_Enabled","m_Sprite","m_Color"],
                           "AudioSource":["m_GameObject","m_Enabled","m_audioClip","m_Volume","m_Pitch","m_Loop","m_PlayOnAwake"],
-                          "Camera":["m_GameObject","m_Enabled","m_FieldOfView","m_NearClipPlane","m_FarClipPlane"]
+                          "Camera":["m_GameObject","m_Enabled","m_FieldOfView","m_NearClipPlane","m_FarClipPlane"],
+                          "PrefabInstance":["m_SourcePrefab","m_Modification","m_RemovedComponents","m_AddedComponents","m_TransformParent"],
+                          "PrefabModification":["m_Target","m_PropertyPath","m_Value","m_ObjectReference"],
+                          "PropertyModification":["target","propertyPath","value","objectReference"]
                         }
                         record={"source":source,"path_id":str(pid),"type":typ,"name":str(name)[:250],
                                 "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
