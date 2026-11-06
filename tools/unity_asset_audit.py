@@ -41,6 +41,18 @@ def json_safe(value, depth=0):
         return {str(k):json_safe(v,depth+1) for k,v in value.items()}
     if hasattr(value,"m_FileID") and hasattr(value,"m_PathID"):
         return {"m_FileID":int(getattr(value,"m_FileID",0) or 0),"m_PathID":int(getattr(value,"m_PathID",0) or 0)}
+    cls_name=value.__class__.__name__
+    vector_fields={"Vector2f":("x","y"),"Vector3f":("x","y","z"),"Vector4f":("x","y","z","w"),
+                   "Quaternionf":("x","y","z","w"),"Quaternion":("x","y","z","w")}
+    if cls_name in vector_fields:
+        out={}
+        for axis in vector_fields[cls_name]:
+            actual=axis if hasattr(value,axis) else axis.upper()
+            try: out[axis]=float(getattr(value,actual))
+            except Exception: pass
+        if out: return out
+    if cls_name=="ColorRGBA":
+        return {k:float(getattr(value,k)) for k in ("r","g","b","a") if hasattr(value,k)}
     if all(hasattr(value,f"e{i}{j}") for i in range(4) for j in range(4)):
         return {"matrix4x4":[[float(getattr(value,f"e{i}{j}")) for j in range(4)] for i in range(4)]}
     if hasattr(value,"component"):
