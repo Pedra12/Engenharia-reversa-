@@ -371,7 +371,7 @@ def main():
     lines=["# Auditoria especializada de recursos Unity - Block Gun 3D","",
       "- Famílias .split reconstruídas: **%s**"%len(assembled),
       "- Partes .split utilizadas: **%s**"%summary["split_sources"],
-      "- Bundles Unity adicionais: **%s**"%len(bundle_names),
+      "- Bundles Unity adicionais: **%s**"%len(bundle_manifest),
       "- Objetos catalogados: **%s**"%len(rows),
       "- Tipos Unity: **%s**"%len(counts),
       "- Objetos exportados: **%s**"%summary["exported_files"],
