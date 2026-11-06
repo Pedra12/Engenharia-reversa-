@@ -286,11 +286,14 @@ def main():
                 elif typ=="MeshCollider":
                     for ref in comp.get("references",[]):
                         if ref.get("field")=="m_Mesh": colpath=ref.get("exported_obj") or colpath
-                elif typ=="MeshRenderer":
+                elif typ in ("MeshRenderer","SkinnedMeshRenderer"):
+                    # Both renderer types own their own ordered m_Materials array.
+                    # Skinned gameplay prefabs were previously losing every material slot.
                     mats=comp.get("material_resources",[])
-                    batch=comp.get("static_batch_info")
-                    lightmap_index=comp.get("m_LightmapIndex")
-                    lightmap_st=(comp.get("m_LightmapTilingOffset") or comp.get("m_LightmapST") or comp.get("m_LightmapScaleOffset"))
+                    if typ=="MeshRenderer":
+                        batch=comp.get("static_batch_info")
+                        lightmap_index=comp.get("m_LightmapIndex")
+                        lightmap_st=(comp.get("m_LightmapTilingOffset") or comp.get("m_LightmapST") or comp.get("m_LightmapScaleOffset"))
                 for material in comp.get("material_resources",[]):
                     # Match Unity TexEnv by Texture2D path ID and retain its atlas transform.
                     uv_entries=material.get("unity_uv_transforms",[])
@@ -715,6 +718,8 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     if renderpath=="":
         renderpath=_ref_by_type(d.get("components",[]),"MeshFilter","m_Mesh")
     if renderpath=="":
+        renderpath=_ref_by_type(d.get("components",[]),"SkinnedMeshRenderer","m_Mesh")
+    if renderpath=="":
         renderpath=colpath
     var render_mesh:Mesh=null
     if renderpath!="":
@@ -877,6 +882,8 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
                 return null
     # Shader/material behavior follows the recovered Unity Material name/reference,
     # never a guessed object-name category.
+    if material_name=="unlit":
+        sm.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
     if material_name=="m_atlas_environment_alpha":
         sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
         sm.alpha_scissor_threshold=0.42
