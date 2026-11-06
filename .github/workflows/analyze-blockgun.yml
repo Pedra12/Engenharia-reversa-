@@ -66,6 +66,15 @@ jobs:
       - name: Build relational Unity scene graph
         if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_scene_graph.py
+      - name: Probe original Unity Addressables bundles in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d unity_audit/bundle_candidates ]; then
+            python3 tools/unity_bundle_probe.py unity_audit/bundle_candidates unity_audit/bundle_probe
+          else
+            echo "No standalone Addressables bundle candidates were found."
+          fi
       - name: Upload original combat extraction for rig and HUD reconstruction
         uses: actions/upload-artifact@v4
         with:
@@ -78,6 +87,7 @@ jobs:
             unity_audit/UNITY_OBJECT_CATALOG.csv
             unity_audit/UNITY_MATERIAL_PROPERTIES.json
             unity_audit/ARCHIVE_BUNDLE_CANDIDATES.csv
+            unity_audit/bundle_probe/
             unity_audit/exported/meshes/*_Mesh_sk_char_sold_male_01.obj
             unity_audit/exported/meshes/*_Mesh_sk_bomb_fp.obj
             unity_audit/exported/meshes/*_Mesh_sk_gloves.obj
