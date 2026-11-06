@@ -182,7 +182,7 @@ def main():
                           "fields":selected_fields(data,["m_SampleRate","m_Legacy","m_Compressed","m_UseHighQualityCurve","m_RotationCurves","m_PositionCurves","m_ScaleCurves","m_FloatCurves","m_PPtrCurves","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings"])})
                     elif typ=="AnimatorController":
                         controller_records.append({"source":source,"path_id":str(pid),"name":str(name),
-                          "fields":selected_fields(data,["m_AnimatorLayers","m_AnimatorParameters","m_Controller"])})
+                          "fields":selected_fields(data,["m_AnimatorLayers","m_AnimatorParameters","m_Controller","m_AnimationClips","m_ClipArray","m_ClipCount","m_MotionSet","m_ClipIDArray"])})
                     elif typ=="Avatar":
                         avatar_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_Avatar","m_TOS","m_Name"])})
