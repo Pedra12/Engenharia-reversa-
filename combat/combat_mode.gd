@@ -1,7 +1,7 @@
 extends Node3D
 
 const BOT_SCRIPT = preload("res://combat/combat_bot.gd")
-const SOLDIER_MESH_PATH = "res://assets/combat_source/meshes/sk_char_sold_male_01_7088991893364766669.obj"
+const RIG_LOADER_SCRIPT = preload("res://combat/original_rig_loader.gd")
 const UMP_MESH_PATH = "res://assets/combat_source/meshes/UMP_45_2.obj"
 const SOLDIER_TEXTURE_PATH = "res://assets/combat_source/textures/SimpleMilitary_Soldier01_Black_-6561600483854028127.png"
 const UMP_TEXTURE_PATH = "res://assets/combat_source/textures/UMP_45_Diffuse_-7805003812694618604.png"
@@ -16,8 +16,9 @@ var camera: Camera3D
 var camera_pivot: Node3D
 var weapon_mount: Node3D
 var weapon_mesh: MeshInstance3D
-var soldier_mesh: Mesh
-var soldier_material: StandardMaterial3D
+var rig_loader: OriginalRigLoader
+var player_fp_rig: Dictionary
+var player_weapon_attachment: BoneAttachment3D
 var weapon_material: StandardMaterial3D
 var hud: Control
 var health_label: Label
@@ -40,7 +41,7 @@ var fire_cooldown := 0.0
 var reload_timer := 0.0
 var footstep_timer := 0.0
 var aiming := false
-var fire_held := false
+var auto_fire_enabled := true
 var dead_timer := 0.0
 var spawn_position := Vector3.ZERO
 var grass_player: AudioStreamPlayer3D
@@ -59,14 +60,7 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	print("COMBAT_MODE_READY map=Floresta bots=3 weapon=UMP45")
 
 func _prepare_assets() -> void:
-	var soldier_resource = load(SOLDIER_MESH_PATH)
-	if soldier_resource is Mesh:
-		soldier_mesh = soldier_resource
-	soldier_material = StandardMaterial3D.new()
-	var soldier_texture = load(SOLDIER_TEXTURE_PATH)
-	if soldier_texture is Texture2D:
-		soldier_material.albedo_texture = soldier_texture
-	soldier_material.roughness = 0.88
+	rig_loader = RIG_LOADER_SCRIPT.new()
 	weapon_material = StandardMaterial3D.new()
 	var weapon_texture = load(UMP_TEXTURE_PATH)
 	if weapon_texture is Texture2D:
@@ -128,13 +122,6 @@ func _create_player() -> void:
 	collision.shape = capsule
 	collision.position.y = 0.9
 	player.add_child(collision)
-	if soldier_mesh:
-		var body := MeshInstance3D.new()
-		body.name = "OriginalSoldierMesh"
-		body.mesh = soldier_mesh
-		body.material_override = soldier_material
-		body.rotation_degrees.x = -90.0
-		player.add_child(body)
 	map_root.add_child(player)
 	var center = _map_center()
 	var floor_hit = _find_floor(center)
@@ -147,24 +134,27 @@ func _create_player() -> void:
 		spawn_position = floor_hit.position + Vector3.UP * 0.12
 	player.global_position = spawn_position
 	camera_pivot = Node3D.new()
-	camera_pivot.position = Vector3(0.0, 1.48, 0.0)
+	camera_pivot.position = Vector3(0.0, 1.58, 0.0)
 	player.add_child(camera_pivot)
 	camera = Camera3D.new()
-	camera.position = Vector3(0.38, 0.20, 3.75)
+	camera.position = Vector3.ZERO
 	camera.fov = 70.0
 	camera.current = true
 	camera_pivot.add_child(camera)
-	weapon_mount = Node3D.new()
-	weapon_mount.position = Vector3(0.34, -0.28, -0.52)
-	camera.add_child(weapon_mount)
-	var weapon_resource = load(UMP_MESH_PATH)
-	if weapon_resource is Mesh:
-		weapon_mesh = MeshInstance3D.new()
-		weapon_mesh.mesh = weapon_resource
-		weapon_mesh.material_override = weapon_material
-		weapon_mesh.rotation.y = PI
-		weapon_mesh.scale = Vector3.ONE * 1.0
-		weapon_mount.add_child(weapon_mesh)
+	player_fp_rig = rig_loader.create_rig(camera, "sk_gloves", true)
+	if player_fp_rig.is_empty():
+		push_error("Original first-person hand rig could not be created.")
+	else:
+		player_weapon_attachment = rig_loader.create_bone_attachment(player_fp_rig["skeleton"], "DEF-hand.R", "OriginalWeaponSocket")
+		weapon_mount = Node3D.new()
+		weapon_mount.name = "WeaponMount"
+		player_weapon_attachment.add_child(weapon_mount)
+		var weapon_resource = load(UMP_MESH_PATH)
+		if weapon_resource is Mesh:
+			weapon_mesh = MeshInstance3D.new()
+			weapon_mesh.mesh = weapon_resource
+			weapon_mesh.material_override = weapon_material
+			weapon_mount.add_child(weapon_mesh)
 	_create_audio()
 
 func _create_audio() -> void:
@@ -182,8 +172,8 @@ func _create_audio() -> void:
 	add_child(reload_player)
 
 func _create_bots() -> void:
-	if not soldier_mesh:
-		push_error("Original soldier mesh missing; refusing to create placeholder enemies.")
+	if not rig_loader:
+		push_error("Original Unity rig loader missing; refusing to create placeholder enemies.")
 		return
 	var offsets = [Vector3(10, 0, 4), Vector3(-12, 0, -5), Vector3(5, 0, -15)]
 	for index in range(offsets.size()):
@@ -196,7 +186,7 @@ func _create_bots() -> void:
 		bot.name = "BotSoldier_%02d" % (index + 1)
 		map_root.add_child(bot)
 		bot.global_position = floor_hit.position + Vector3.UP * 0.12
-		bot.call("configure", player, self, soldier_mesh, soldier_material)
+		bot.call("configure", player, self, rig_loader, load(UMP_MESH_PATH), weapon_material)
 	print("COMBAT_BOTS_SPAWNED count=", map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false).size())
 
 func _build_hud() -> void:
@@ -234,7 +224,6 @@ func _build_hud() -> void:
 	joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_panel(joystick_knob, Color(0.62, 0.78, 0.88, 0.72), 24)
 	joystick_bg.add_child(joystick_knob)
-	_make_button("TIRO", Vector2(-130, -236), Vector2(112, 68), _fire)
 	_make_button("MIRA", Vector2(-254, -164), Vector2(108, 62), _toggle_aim)
 	_make_button("PULAR", Vector2(-130, -154), Vector2(112, 62), _jump)
 	_make_button("RECARREGAR", Vector2(-254, -88), Vector2(108, 58), _reload)
@@ -277,9 +266,6 @@ func _make_button(value: String, offset: Vector2, dimensions: Vector2, callback:
 	button.add_theme_font_size_override("font_size", 16)
 	button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0))
 	button.pressed.connect(callback)
-	if value == "TIRO":
-		button.button_down.connect(func(): fire_held = true)
-		button.button_up.connect(func(): fire_held = false)
 	hud.add_child(button)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -324,8 +310,9 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
-	if fire_held and fire_cooldown <= 0.0:
-		_fire()
+	if auto_fire_enabled and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
+		if _find_auto_fire_target():
+			_fire()
 	if reload_timer > 0.0:
 		reload_timer -= delta
 		if reload_timer <= 0.0:
@@ -363,12 +350,19 @@ func _physics_process(delta: float) -> void:
 		if footstep_timer <= 0.0 and grass_player and not grass_player.playing:
 			grass_player.play()
 			footstep_timer = 0.48
-	if direction.length() > 0.1 and soldier_mesh:
-		var body = player.get_node_or_null("OriginalSoldierMesh") as MeshInstance3D
-		if body:
-			body.position.y = 0.025 * sin(Time.get_ticks_msec() * 0.018)
 	if Input.is_key_pressed(KEY_SPACE):
 		_jump()
+
+func _find_auto_fire_target() -> bool:
+	if not is_instance_valid(camera):
+		return false
+	var origin := camera.global_position
+	var direction := -camera.global_transform.basis.z
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 100.0)
+	query.collision_mask = 1
+	query.exclude = [player.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider is Node and hit.collider.is_in_group("combat_enemy")
 
 func _fire() -> void:
 	if fire_cooldown > 0.0 or reload_timer > 0.0 or dead_timer > 0.0:
