@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Probe Unity Addressables bundles in isolated processes so one bad bundle cannot kill the main audit."""
-import csv, json, pathlib, subprocess, sys, collections, shutil, traceback
-ROOT=pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent))
-import unity_asset_audit as audit
+"""Fault-isolated Unity AssetBundle probe. One bad serialized object cannot hide the rest."""
+import argparse, collections, csv, json, pathlib, shutil, subprocess, sys, traceback
 
-SCENE_TYPES=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","AudioListener","Camera","ParticleSystem","ParticleSystemRenderer","Light","TrailRenderer","LineRenderer","Rigidbody","BoxCollider","SphereCollider","CapsuleCollider","MeshCollider","CharacterController","LODGroup","Animation","PrefabInstance","PrefabModification","PropertyModification")
+SCENE_TYPES=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","AudioListener","Camera","ParticleSystem","ParticleSystemRenderer","Light","TrailRenderer","LineRenderer","Rigidbody","BoxCollider","SphereCollider","CapsuleCollider","MeshCollider","CharacterController","LODGroup","Animation","PrefabInstance","PrefabModification","PropertyModification","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable")
+ASSET_TYPES=("Mesh","Texture2D","Sprite","AudioClip","Material","AnimationClip","AnimatorController","Avatar","MonoScript")
+ALL_TYPES=SCENE_TYPES+ASSET_TYPES
+
 FIELDS={
  "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
- "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
- "RectTransform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_AnchorMin","m_AnchorMax","m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_Pivot","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
+ "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale"],
+ "RectTransform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_AnchorMin","m_AnchorMax","m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_Pivot"],
  "Canvas":["m_GameObject","m_Enabled","m_RenderMode","m_Camera","m_SortingOrder","m_TargetDisplay"],
  "CanvasRenderer":["m_GameObject","m_CullTransparentMesh"],
  "CanvasGroup":["m_GameObject","m_Enabled","m_Alpha","m_Interactable","m_BlocksRaycasts"],
- "MonoBehaviour":["m_GameObject","m_Enabled","m_Script","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
+ "MonoBehaviour":["m_GameObject","m_Enabled","m_Script"],
  "MeshFilter":["m_GameObject","m_Mesh"],
  "MeshRenderer":["m_GameObject","m_Enabled","m_Materials"],
  "SkinnedMeshRenderer":["m_GameObject","m_Enabled","m_Materials","m_Mesh","m_Bones","m_RootBone","m_LocalAABB"],
@@ -35,101 +35,186 @@ FIELDS={
  "CharacterController":["m_GameObject","m_Enabled","m_Center","m_Radius","m_Height","m_SlopeLimit","m_StepOffset"],
  "LODGroup":["m_GameObject","m_Enabled","m_LODs","m_Size","m_LocalReferencePoint"],
  "Animation":["m_GameObject","m_Enabled","m_Animations","m_Clip"],
- "PrefabInstance":["m_SourcePrefab","m_Modification","m_RemovedComponents","m_AddedComponents","m_TransformParent"],
- "PrefabModification":["m_Target","m_PropertyPath","m_Value","m_ObjectReference"],
- "PropertyModification":["target","propertyPath","value","objectReference"]
+ "Image":["m_GameObject","m_Enabled","m_Sprite","m_Color","m_Material","m_RaycastTarget","m_Type","m_FillMethod","m_FillAmount","m_FillCenter","m_FillClockwise","m_FillOrigin","m_UseSpriteMesh","m_PreserveAspect","m_Maskable"],
+ "RawImage":["m_GameObject","m_Enabled","m_Texture","m_Color","m_RaycastTarget","m_UVRect","m_Maskable"],
+ "Button":["m_GameObject","m_Enabled","m_Interactable","m_Transition","m_Colors","m_SpriteState","m_AnimationTriggers","m_TargetGraphic","m_OnClick"],
+ "Text":["m_GameObject","m_Enabled","m_Text","m_Font","m_FontSize","m_FontStyle","m_Color","m_Alignment","m_HorizontalOverflow","m_VerticalOverflow","m_RichText"],
+ "TextMeshProUGUI":["m_GameObject","m_Enabled","m_text","m_fontSize","m_fontAsset","m_color","m_alignment","m_enableAutoSizing"],
+ "CanvasScaler":["m_GameObject","m_Enabled","m_UiScaleMode","m_ReferencePixelsPerUnit","m_ScaleFactor","m_ReferenceResolution","m_ScreenMatchMode","m_MatchWidthOrHeight"],
+ "GraphicRaycaster":["m_GameObject","m_Enabled","m_IgnoreReversedGraphics","m_BlockingObjects","m_BlockingMask"],
+ "Material":["m_Name","m_Shader","m_SavedProperties","m_CustomRenderQueue"],
+ "MonoScript":["m_Name","m_ClassName","m_Namespace","m_AssemblyName"],
+ "Sprite":["m_Name","m_Rect","m_Pivot","m_Border","m_RD","m_Texture"],
+ "AnimationClip":["m_Name","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings","m_SampleRate"],
+ "AnimatorController":["m_Name","m_AnimatorLayers","m_AnimatorParameters","m_Controller","m_AnimationClips","m_ClipArray"],
+ "Avatar":["m_Name","m_Avatar","m_TOS"]
 }
 
-def single(bundle_path,outdir):
+def safe(s):
+    return "".join(c if c.isalnum() or c in "._-" else "_" for c in str(s))[:150]
+
+def write_json(path,obj):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(json.dumps(obj,ensure_ascii=False,separators=(",",":")),encoding="utf-8")
+
+def manifest(bundle_path,out):
     import UnityPy
-    from PIL import Image
-    bundle_path=pathlib.Path(bundle_path); outdir=pathlib.Path(outdir)
-    for sub in ("meshes","textures","audio"): (outdir/sub).mkdir(parents=True,exist_ok=True)
     env=UnityPy.load(str(bundle_path))
-    objects=list(env.objects)
-    records=[]; counts=collections.Counter(); errors=[]
-    for idx,obj in enumerate(objects):
-        typ=getattr(obj.type,"name",str(obj.type))
+    rows=[]
+    for obj in env.objects:
+        try:
+            rows.append({"path_id":str(obj.path_id),"type":obj.type.name,"byte_size":int(getattr(obj,"byte_size",0) or 0),
+                         "assets_file":str(getattr(getattr(obj,"assets_file",None),"name",""))})
+        except Exception:
+            continue
+    write_json(out/"manifest.json",rows)
+    print("MANIFEST_READY",len(rows),flush=True)
+
+def worker(bundle_path,out,types_filter,path_ids):
+    import UnityPy
+    import unity_asset_audit as audit
+    env=UnityPy.load(str(bundle_path))
+    type_set=set(types_filter); id_set=set(path_ids)
+    rows=[]; counts=collections.Counter(); errors=0
+    (out/"meshes").mkdir(parents=True,exist_ok=True)
+    (out/"textures").mkdir(parents=True,exist_ok=True)
+    (out/"audio").mkdir(parents=True,exist_ok=True)
+    for obj in env.objects:
+        pid=str(obj.path_id); typ=obj.type.name
+        if type_set and typ not in type_set: continue
+        if id_set and pid not in id_set: continue
         try:
             data=obj.read()
-            name=getattr(data,"m_Name","") or getattr(data,"name","") or ""
-            pid=str(getattr(obj,"path_id",idx)); source=audit.source_label(obj)
-            row={"source":source,"path_id":pid,"type":typ,"name":str(name)[:250]}
-            counts[typ]+=1
-            if typ in SCENE_TYPES:
-                row["external_files"]=audit.json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or [])
-                row["fields"]=audit.selected_fields(data,FIELDS.get(typ,[]))
-                if typ=="MonoBehaviour":
-                    try: row["serialized_fields"]=audit.json_safe(obj.read_typetree())
-                    except Exception as e: row["typetree_error"]=str(e)[:200]
-            elif typ=="Mesh":
+            name=str(getattr(data,"m_Name","") or "")
+            base=safe(f"{typ}_{name}_{pid}")
+            row={"source":pathlib.Path(bundle_path).name,"path_id":pid,"type":typ,"name":name,
+                 "byte_size":int(getattr(obj,"byte_size",0) or 0)}
+            if typ in FIELDS:
+                row["fields"]=audit.selected_fields(data,FIELDS[typ])
+            if typ in SCENE_TYPES and typ in ("MonoBehaviour","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable"):
+                try: row["serialized_fields"]=audit.json_safe(obj.read_typetree())
+                except Exception as e: row["typetree_error"]=str(e)[:200]
+            if typ=="Mesh":
                 try:
-                    blob=data.export(); blob=blob if isinstance(blob,bytes) else str(blob).encode("utf-8")
-                    target=outdir/"meshes"/(audit.safe(name or pid)+".obj"); audit.save(target,blob); row["exported"]=str(target)
-                except Exception as e: row["export_error"]=str(e)[:250]
+                    exported=data.export()
+                    payload=exported if isinstance(exported,bytes) else str(exported).encode("utf-8")
+                    target=out/"meshes"/(base+".obj");audit.save(target,payload);row["exported"]=str(target)
+                except Exception as e: row["export_error"]="mesh: "+str(e)[:200]
             elif typ in ("Texture2D","Sprite"):
                 if typ=="Sprite":
-                    row["fields"]=audit.selected_fields(data,["m_Name","m_Rect","m_Pivot","m_Border","m_RD","m_Texture"])
+                    row["fields"]=audit.selected_fields(data,FIELDS["Sprite"])
                 try:
-                    im=data.image
-                    if im:
-                        target=outdir/"textures"/(audit.safe(name or pid)+".png"); im.save(target); row["exported"]=str(target)
-                except Exception as e: row["export_error"]=str(e)[:250]
+                    image=data.image
+                    if image:
+                        target=out/"textures"/(base+".png");target.parent.mkdir(parents=True,exist_ok=True);image.save(target);row["exported"]=str(target)
+                except Exception as e: row["export_error"]="image: "+str(e)[:200]
             elif typ=="AudioClip":
                 try:
-                    samples=data.samples
                     saved=[]
-                    for sn,blob in (samples or {}).items():
-                        target=outdir/"audio"/(audit.safe(name or pid)+"_"+audit.safe(sn)+".audio")
-                        audit.save(target,blob); saved.append(str(target))
-                    if saved: row["exported"]=saved
-                except Exception as e: row["export_error"]=str(e)[:250]
-            elif typ=="AnimationClip":
-                row["fields"]=audit.selected_fields(data,["m_SampleRate","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings"])
-            elif typ=="AnimatorController":
-                row["fields"]=audit.selected_fields(data,["m_AnimatorLayers","m_AnimatorParameters","m_Controller"])
-            elif typ=="Avatar":
-                row["fields"]=audit.selected_fields(data,["m_Avatar","m_TOS","m_Name"])
+                    for sample_name,blob in (data.samples or {}).items():
+                        ext=pathlib.Path(str(sample_name)).suffix or ".audio"
+                        target=out/"audio"/(base+"_"+safe(sample_name)+ext)
+                        audit.save(target,blob);saved.append(str(target))
+                    if saved: row["exported"]=";".join(saved)
+                except Exception as e: row["export_error"]="audio: "+str(e)[:200]
             elif typ=="Material":
-                row["fields"]=audit.selected_fields(data,["m_Name","m_Shader","m_SavedProperties","m_CustomRenderQueue"])
+                row["fields"]=audit.selected_fields(data,FIELDS["Material"])
+            elif typ=="AnimationClip":
+                row["fields"]=audit.selected_fields(data,FIELDS["AnimationClip"])
+            elif typ=="AnimatorController":
+                row["fields"]=audit.selected_fields(data,FIELDS["AnimatorController"])
+            elif typ=="Avatar":
+                row["fields"]=audit.selected_fields(data,FIELDS["Avatar"])
             elif typ=="MonoScript":
-                row["fields"]=audit.selected_fields(data,["m_Name","m_ClassName","m_Namespace","m_AssemblyName"])
-            records.append(row)
+                row["fields"]=audit.selected_fields(data,FIELDS["MonoScript"])
+            rows.append(row);counts[typ]+=1
         except Exception as e:
-            errors.append({"path_id":str(getattr(obj,"path_id",idx)),"type":typ,"error":str(e)[:250]})
-    outdir.mkdir(parents=True,exist_ok=True)
-    (outdir/"objects.json").write_text(json.dumps(records,ensure_ascii=False,indent=2),encoding="utf-8")
-    summary={"bundle":str(bundle_path.name),"objects":len(records),"types":dict(counts.most_common()),"errors":errors[:100]}
-    (outdir/"summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
-    print(json.dumps(summary,ensure_ascii=False))
+            errors+=1
+            rows.append({"source":pathlib.Path(bundle_path).name,"path_id":pid,"type":typ,"error":str(e)[:250]})
+    write_json(out/"objects.json",rows)
+    write_json(out/"summary.json",{"objects":len(rows),"types":dict(counts),"errors":errors,"filters":{"types":types_filter,"path_ids":len(path_ids)}})
+    print("WORKER_DONE",len(rows),dict(counts),"errors",errors,flush=True)
+
+def run_child(bundle_path, out, mode, types=(), ids=()):
+    cmd=[sys.executable,__file__,"--"+mode,str(bundle_path),str(out)]
+    if types: cmd += ["--types",",".join(types)]
+    if ids: cmd += ["--ids",",".join(ids)]
+    return subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+
+def merge_worker(worker_dir,final_dir,all_rows):
+    obj=worker_dir/"objects.json"
+    if obj.exists():
+        try: all_rows.extend(json.loads(obj.read_text(encoding="utf-8")))
+        except Exception: pass
+    for kind in ("meshes","textures","audio"):
+        src=worker_dir/kind;dst=final_dir/kind
+        if src.exists():
+            dst.mkdir(parents=True,exist_ok=True)
+            for file in src.iterdir():
+                target=dst/file.name
+                if not target.exists(): shutil.copy2(file,target)
 
 def main():
-    if len(sys.argv)>=2 and sys.argv[1]=="--single":
-        single(sys.argv[2],sys.argv[3]); return
-    if len(sys.argv)<3:
-        raise SystemExit("usage: unity_bundle_probe.py <bundle_candidates_dir> <output_dir>")
-    source=pathlib.Path(sys.argv[1]); output=pathlib.Path(sys.argv[2]); output.mkdir(parents=True,exist_ok=True)
-    candidates=sorted(p for p in source.iterdir() if p.is_file())
-    results=[]
-    for p in candidates:
-        if p.stat().st_size<4096:
-            results.append({"bundle":p.name,"size":p.stat().st_size,"returncode":0,"status":"skipped_tiny"}); continue
-        dest=output/audit.safe(p.stem)
-        try:
-            r=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve()),"--single",str(p),str(dest)],capture_output=True,text=True,timeout=240)
-            summary={}
-            try: summary=json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
-            except Exception: pass
-            results.append({"bundle":p.name,"size":p.stat().st_size,"returncode":r.returncode,"status":"ok" if r.returncode==0 else "isolated_failure","objects":summary.get("objects",0),"types":json.dumps(summary.get("types",{}),ensure_ascii=False),"stderr":r.stderr[-1500:]})
-            if r.returncode!=0:
-                failed=output/"failed_bundles"; failed.mkdir(exist_ok=True); shutil.copy2(p,failed/p.name)
-        except subprocess.TimeoutExpired as e:
-            results.append({"bundle":p.name,"size":p.stat().st_size,"returncode":124,"status":"timeout","stderr":str(e)[:1500]})
-            failed=output/"failed_bundles"; failed.mkdir(exist_ok=True); shutil.copy2(p,failed/p.name)
-    with open(output/"bundle_probe_summary.csv","w",newline="",encoding="utf-8") as f:
-        fields=["bundle","size","returncode","status","objects","types","stderr"]
-        w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(results)
-    print(json.dumps({"bundles":len(candidates),"successful":sum(x["status"]=="ok" for x in results),"failed":sum(x["status"] in ("isolated_failure","timeout") for x in results)},ensure_ascii=False))
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--manifest",nargs=2)
+    ap.add_argument("--worker",nargs=2)
+    ap.add_argument("--types",default="")
+    ap.add_argument("--ids",default="")
+    ap.add_argument("--bundles",default="unity_audit")
+    ap.add_argument("--out",default="unity_audit/bundle_probe")
+    args=ap.parse_args()
+    if args.manifest:
+        manifest(pathlib.Path(args.manifest[0]),pathlib.Path(args.manifest[1]));return
+    if args.worker:
+        worker(pathlib.Path(args.worker[0]),pathlib.Path(args.worker[1]),[x for x in args.types.split(",") if x],[x for x in args.ids.split(",") if x]);return
+    root=pathlib.Path(args.bundles);out=pathlib.Path(args.out);out.mkdir(parents=True,exist_ok=True)
+    candidates=[p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (".bundle",".bund",".assetbundle")]
+    summary=[]
+    for bundle in candidates:
+        bundle_name=safe(bundle.name);final_dir=out/bundle_name;final_dir.mkdir(parents=True,exist_ok=True)
+        manifest_dir=out/("_manifest_"+bundle_name);manifest_dir.mkdir(parents=True,exist_ok=True)
+        m=run_child(bundle,manifest_dir,"manifest")
+        if m.returncode!=0 or not (manifest_dir/"manifest.json").exists():
+            summary.append({"bundle":bundle.name,"size":bundle.stat().st_size,"returncode":m.returncode,"status":"manifest_failed","objects":0,"types":{},"stderr":m.stdout[-500:]})
+            shutil.copy2(bundle,out/"failed_bundles"/bundle.name);continue
+        manifest_rows=json.loads((manifest_dir/"manifest.json").read_text(encoding="utf-8"))
+        by_type=collections.defaultdict(list)
+        for row in manifest_rows:
+            if row["type"] in ALL_TYPES: by_type[row["type"]].append(row["path_id"])
+        groups=[
+            [t for t in SCENE_TYPES if by_type.get(t)],
+            [t for t in ASSET_TYPES if by_type.get(t)]
+        ]
+        all_rows=[];failed_types=[];worker_logs=[]
+        def process_type(typ,ids):
+            label=safe(typ+"_"+str(len(worker_logs)))
+            worker_dir=final_dir/("_worker_"+label);worker_dir.mkdir(parents=True,exist_ok=True)
+            result=run_child(bundle,worker_dir,"worker",[typ],ids)
+            worker_logs.append({"type":typ,"ids":len(ids),"returncode":result.returncode,"log":result.stdout[-1000:]})
+            if result.returncode==0 and (worker_dir/"objects.json").exists():
+                merge_worker(worker_dir,final_dir,all_rows);return
+            if len(ids)>1:
+                mid=len(ids)//2
+                process_type(typ,ids[:mid]);process_type(typ,ids[mid:])
+            else:
+                failed_types.append({"type":typ,"path_id":ids[0] if ids else "","returncode":result.returncode,"log":result.stdout[-500:]})
+        # Run each Unity object type independently. If a native decoder crashes on one object,
+        # recursively bisect only that type until all safe objects have been recovered.
+        for typ,ids in by_type.items():
+            process_type(typ,ids)
+        write_json(final_dir/"objects.json",all_rows)
+        counts=collections.Counter(x.get("type","") for x in all_rows)
+        write_json(final_dir/"summary.json",{"objects":len(all_rows),"types":dict(counts),"failed_objects":failed_types,"manifest_objects":len(manifest_rows)})
+        write_json(final_dir/"worker_logs.json",worker_logs)
+        if not all_rows:
+            shutil.copy2(bundle,out/"failed_bundles"/bundle.name)
+        summary.append({"bundle":bundle.name,"size":bundle.stat().st_size,"returncode":0,"status":"partial" if failed_types else "ok","objects":len(all_rows),"types":dict(counts),"failed":len(failed_types),"stderr":""})
+    with (out/"bundle_probe_summary.csv").open("w",newline="",encoding="utf-8") as f:
+        writer=csv.DictWriter(f,fieldnames=["bundle","size","returncode","status","objects","types","failed","stderr"]);writer.writeheader()
+        for row in summary:
+            row["types"]=json.dumps(row.get("types",{}),ensure_ascii=False)
+            writer.writerow(row)
+    print("BUNDLE_PROBE_READY",[(x["bundle"],x["status"],x["objects"],x.get("failed",0)) for x in summary],flush=True)
 
 if __name__=="__main__":
     main()
