@@ -45,6 +45,19 @@ FIELDS={
  "Material":["m_Name","m_Shader","m_SavedProperties","m_CustomRenderQueue"],
  "MonoScript":["m_Name","m_ClassName","m_Namespace","m_AssemblyName"],
  "Sprite":["m_Name","m_Rect","m_Pivot","m_Border","m_RD","m_Texture"],
+ "ParticleSystem":["m_GameObject","m_Enabled","lengthInSec","looping","prewarm","playOnAwake","simulationSpace","startDelay","startLifetime","startSpeed","startSize","startColor","gravityModifier","maxParticles","emission","shape","sizeOverLifetime","colorOverLifetime"],
+ "ParticleSystemRenderer":["m_GameObject","m_Enabled","m_Materials","m_RenderMode","m_SortingFudge"],
+ "Light":["m_GameObject","m_Enabled","m_Type","m_Color","m_Intensity","m_Range","m_SpotAngle"],
+ "TrailRenderer":["m_GameObject","m_Enabled","m_Time","m_StartWidth","m_EndWidth","m_Materials"],
+ "LineRenderer":["m_GameObject","m_Enabled","m_PositionCount","m_StartWidth","m_EndWidth","m_Materials"],
+ "Rigidbody":["m_GameObject","m_Mass","m_Drag","m_AngularDrag","m_UseGravity","m_IsKinematic"],
+ "BoxCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Center","m_Size"],
+ "SphereCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Center","m_Radius"],
+ "CapsuleCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Center","m_Radius","m_Height","m_Direction"],
+ "MeshCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Convex","m_Mesh"],
+ "CharacterController":["m_GameObject","m_Enabled","m_Center","m_Radius","m_Height","m_SlopeLimit","m_StepOffset"],
+ "LODGroup":["m_GameObject","m_Enabled","m_LODs","m_Size","m_LocalReferencePoint"],
+ "Animation":["m_GameObject","m_Enabled","m_Animations","m_Clip"],
  "AnimationClip":["m_Name","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings","m_SampleRate"],
  "AnimatorController":["m_Name","m_AnimatorLayers","m_AnimatorParameters","m_Controller","m_AnimationClips","m_ClipArray"],
  "Avatar":["m_Name","m_Avatar","m_TOS"]
@@ -144,7 +157,17 @@ def run_child(bundle_path, out, mode, types=(), ids=()):
 def merge_worker(worker_dir,final_dir,all_rows):
     obj=worker_dir/"objects.json"
     if obj.exists():
-        try: all_rows.extend(json.loads(obj.read_text(encoding="utf-8")))
+        try:
+            rows=json.loads(obj.read_text(encoding="utf-8"))
+            for row in rows:
+                if row.get("exported"):
+                    mapped=[]
+                    for raw in str(row["exported"]).split(";"):
+                        p=pathlib.Path(raw)
+                        kind=p.parent.name
+                        mapped.append(str(final_dir/kind/p.name))
+                    row["exported"]=";".join(mapped)
+            all_rows.extend(rows)
         except Exception: pass
     for kind in ("meshes","textures","audio"):
         src=worker_dir/kind;dst=final_dir/kind
@@ -153,6 +176,7 @@ def merge_worker(worker_dir,final_dir,all_rows):
             for file in src.iterdir():
                 target=dst/file.name
                 if not target.exists(): shutil.copy2(file,target)
+    shutil.rmtree(worker_dir,ignore_errors=True)
 
 def main():
     ap=argparse.ArgumentParser()
@@ -176,6 +200,7 @@ def main():
         m=run_child(bundle,manifest_dir,"manifest")
         if m.returncode!=0 or not (manifest_dir/"manifest.json").exists():
             summary.append({"bundle":bundle.name,"size":bundle.stat().st_size,"returncode":m.returncode,"status":"manifest_failed","objects":0,"types":{},"stderr":m.stdout[-500:]})
+            (out/"failed_bundles").mkdir(parents=True,exist_ok=True)
             shutil.copy2(bundle,out/"failed_bundles"/bundle.name);continue
         manifest_rows=json.loads((manifest_dir/"manifest.json").read_text(encoding="utf-8"))
         by_type=collections.defaultdict(list)
@@ -203,10 +228,12 @@ def main():
         for typ,ids in by_type.items():
             process_type(typ,ids)
         write_json(final_dir/"objects.json",all_rows)
+        shutil.rmtree(manifest_dir,ignore_errors=True)
         counts=collections.Counter(x.get("type","") for x in all_rows)
         write_json(final_dir/"summary.json",{"objects":len(all_rows),"types":dict(counts),"failed_objects":failed_types,"manifest_objects":len(manifest_rows)})
         write_json(final_dir/"worker_logs.json",worker_logs)
         if not all_rows:
+            (out/"failed_bundles").mkdir(parents=True,exist_ok=True)
             shutil.copy2(bundle,out/"failed_bundles"/bundle.name)
         summary.append({"bundle":bundle.name,"size":bundle.stat().st_size,"returncode":0,"status":"partial" if failed_types else "ok","objects":len(all_rows),"types":dict(counts),"failed":len(failed_types),"stderr":""})
     with (out/"bundle_probe_summary.csv").open("w",newline="",encoding="utf-8") as f:
