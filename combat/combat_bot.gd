@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+const ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_animation_player.gd")
+
 var target: CharacterBody3D
 var combat: Node
 var rig_loader: OriginalRigLoader
@@ -12,6 +14,9 @@ var visual_root: Node3D
 var weapon_mount: Node3D
 var weapon_visual: MeshInstance3D
 var dead := false
+var anim_player: OriginalAnimationPlayer
+var shoot_animation_timer := 0.0
+var current_locomotion := ""
 
 func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_loader: OriginalRigLoader, original_weapon_mesh: Mesh, original_weapon_material: Material) -> void:
 	target = player_target
@@ -35,6 +40,13 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 		return
 	visual_root = rig["root"]
 	skeleton = rig["skeleton"]
+	anim_player = ANIMATION_PLAYER_SCRIPT.new()
+	add_child(anim_player)
+	anim_player.setup(skeleton)
+	if anim_player.has_clip("Rifle_Idle_gun_down"):
+		anim_player.play("Rifle_Idle_gun_down")
+	else:
+		anim_player.play("Idle")
 	weapon_mount = Node3D.new()
 	weapon_mount.name = "WeaponMount"
 	var socket_name := "socket_hand_right"
@@ -52,6 +64,7 @@ func _physics_process(delta: float) -> void:
 	if dead or not is_instance_valid(target):
 		return
 	shoot_cooldown = maxf(0.0, shoot_cooldown - delta)
+	shoot_animation_timer = maxf(0.0, shoot_animation_timer - delta)
 	strafe_phase += delta * 1.8
 	var to_target := target.global_position - global_position
 	to_target.y = 0.0
@@ -71,8 +84,18 @@ func _physics_process(delta: float) -> void:
 	velocity.z = direction.z * speed
 	velocity.y -= 18.0 * delta
 	move_and_slide()
+	if anim_player and shoot_animation_timer <= 0.0:
+		var locomotion := "front_run" if direction.length() > 0.7 else ("front_walk" if direction.length() > 0.25 else "Rifle_Idle_gun_down")
+		if not anim_player.has_clip(locomotion):
+			locomotion = "Idle"
+		if locomotion != current_locomotion:
+			current_locomotion = locomotion
+			anim_player.play(locomotion, 0.16, 1.0, locomotion != "Rifle_Idle_gun_down" and locomotion != "Idle")
 	if distance < 24.0 and shoot_cooldown <= 0.0 and is_instance_valid(combat):
 		shoot_cooldown = 1.15
+		shoot_animation_timer = 0.32
+		if anim_player and anim_player.has_clip("Fire"):
+			anim_player.play("Fire", 0.06, 1.0, false)
 		combat.call("bot_shoot", self)
 
 func take_damage(amount: float, headshot: bool = false) -> bool:
@@ -84,6 +107,12 @@ func take_damage(amount: float, headshot: bool = false) -> bool:
 		velocity = Vector3.ZERO
 		collision_layer = 0
 		collision_mask = 0
+		set_physics_process(false)
+		if anim_player:
+			if anim_player.has_clip("Death"):
+				anim_player.play("Death", 0.04, 1.0, false)
+			elif anim_player.has_clip("Hit Reaction"):
+				anim_player.play("Hit Reaction", 0.04, 1.0, false)
 		if is_instance_valid(combat):
 			combat.call("bot_killed", self)
 		return true
