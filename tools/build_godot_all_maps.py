@@ -459,6 +459,9 @@ func _ready():
     _show_home()
     print("BLOCKGUN_BOOT_OK")
     print("BLOCKGUN_MAPS_READY count=",MAPS.size())
+    if OS.get_cmdline_user_args().has("--audit-combat"):
+        call_deferred("_run_combat_audit")
+        return
 func _make_menu():
     var layer=CanvasLayer.new()
     layer.layer=10
@@ -636,6 +639,17 @@ func _end_combat():
     if is_instance_valid(camera):
         camera.current=true
     _show_home()
+func _run_combat_audit():
+    _start_combat()
+    await get_tree().create_timer(2.5).timeout
+    var bot_count=world.find_children("BotSoldier_*","CharacterBody3D",true,false).size() if is_instance_valid(world) else 0
+    var combat_player=combat_session.get("player") if is_instance_valid(combat_session) else null
+    if is_instance_valid(combat_player) and bot_count>0:
+        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count)
+        get_tree().quit(0)
+    else:
+        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count)
+        get_tree().quit(1)
 func _show_home():
     _stop_walk_mode()
     home_panel.visible=true
