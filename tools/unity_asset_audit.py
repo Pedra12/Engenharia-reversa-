@@ -15,8 +15,7 @@ def safe(s):
 def save(path,data):
     path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(data)
 
-def source_label(obj):
-    af=getattr(obj,"assets_file",None)
+def assetfile_label(af):
     for owner in (af,getattr(af,"file",None) if af is not None else None):
         if owner is None: continue
         for attr in ("name","path","file_name","filename"):
@@ -26,6 +25,8 @@ def source_label(obj):
                     return value
             except Exception: pass
     return str(af or "")
+def source_label(obj):
+    return assetfile_label(getattr(obj,"assets_file",None))
 def json_safe(value, depth=0):
     if depth > 10:
         return str(value)
@@ -40,7 +41,9 @@ def json_safe(value, depth=0):
     if isinstance(value,dict):
         return {str(k):json_safe(v,depth+1) for k,v in value.items()}
     if hasattr(value,"m_FileID") and hasattr(value,"m_PathID"):
-        return {"m_FileID":int(getattr(value,"m_FileID",0) or 0),"m_PathID":int(getattr(value,"m_PathID",0) or 0)}
+        target=assetfile_label(getattr(value,"assetsfile",None))
+        return {"m_FileID":int(getattr(value,"m_FileID",0) or 0),"m_PathID":int(getattr(value,"m_PathID",0) or 0),
+                "target_source":target}
     cls_name=value.__class__.__name__
     vector_fields={"Vector2f":("x","y"),"Vector3f":("x","y","z"),"Vector4f":("x","y","z","w"),
                    "Quaternionf":("x","y","z","w"),"Quaternion":("x","y","z","w")}
