@@ -629,12 +629,13 @@ func _start_combat():
     map_actions.visible=false
     combat_session=Node3D.new()
     combat_session.name="FlorestaCombatSession"
-    combat_session.set_script(load("res://combat/combat_mode.gd"))
+    combat_session.set_script(load("res://combat/combat_mode.gd") as Script)
     add_child(combat_session)
     combat_session.call_deferred("begin",world,Callable(self,"_end_combat"))
 func _end_combat():
     if is_instance_valid(combat_session):
-        combat_session.queue_free()
+        combat_session.call("shutdown")
+    combat_session.queue_free()
     combat_session=null
     if is_instance_valid(camera):
         camera.current=true
