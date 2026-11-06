@@ -491,6 +491,10 @@ func _toggle_aim() -> void:
 func _jump() -> void:
 	if player.is_on_floor() and dead_timer <= 0.0:
 		player.velocity.y = 6.2
+		if player_animation_player and player_animation_player.has_clip("jump_loop"):
+			player_animation_player.play("jump_loop", 0.04, 1.0, false)
+			player_animation_lock = 0.45
+			current_player_animation = ""
 		if jump_player:
 			jump_player.play()
 
