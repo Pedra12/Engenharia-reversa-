@@ -421,10 +421,15 @@ func bot_shoot(bot: CharacterBody3D) -> void:
 			status_label.text = "ELIMINADO  |  RETORNANDO..."
 			player.velocity = Vector3.ZERO
 
-func bot_killed(_bot: Node3D) -> void:
+func bot_killed(bot: Node3D) -> void:
 	kills += 1
 	if is_instance_valid(kills_label):
 		kills_label.text = "ELIMINAÇÕES %d" % kills
+	_remove_dead_bot.call_deferred(bot)
+func _remove_dead_bot(bot: Node3D) -> void:
+	await get_tree().create_timer(1.15).timeout
+	if is_instance_valid(bot):
+		bot.queue_free()
 
 func _reload() -> void:
 	if reload_timer > 0.0 or ammo >= 30 or reserve_ammo <= 0:
