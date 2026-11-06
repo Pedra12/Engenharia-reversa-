@@ -230,21 +230,21 @@ def main():
         if source_folder.is_dir():
             shutil.copytree(source_folder,original_assets/folder,dirs_exist_ok=True)
     # Include the original first-person hand/arm meshes and their source material map.
-    for source_name in ("SerializedFile_Mesh_sk_bomb_fp.obj","SerializedFile_Mesh_sk_gloves.obj"):
-        source=original_export/"meshes"/source_name
-        if not source.is_file():
-            raise SystemExit("Original first-person mesh missing: "+source_name)
+    for suffix in ("Mesh_sk_bomb_fp.obj","Mesh_sk_gloves.obj"):
+        matches=list((original_assets/"meshes").glob("*_"+suffix))
+        if not matches:
+            raise SystemExit("Original first-person mesh missing by asset name: "+suffix)
     required_original_textures=(
-        "SerializedFile_Texture2D_arm-diffuse.png",
-        "SerializedFile_Sprite_ui_gameplay_left_joystick.png",
-        "SerializedFile_Sprite_ui_gameplay_joystick_knob.png",
-        "SerializedFile_Sprite_center_scope_256.png",
-        "SerializedFile_Sprite_ui_gameplay_button_circle.png",
-        "SerializedFile_Sprite_CF-Button-Fire.png"
+        "Texture2D_arm-diffuse.png",
+        "Sprite_ui_gameplay_left_joystick.png",
+        "Sprite_ui_gameplay_joystick_knob.png",
+        "Sprite_center_scope_256.png",
+        "Sprite_ui_gameplay_button_circle.png",
+        "Sprite_CF-Button-Fire.png"
     )
-    missing_ui=[name for name in required_original_textures if not (original_assets/"textures"/name).is_file()]
+    missing_ui=[suffix for suffix in required_original_textures if not list((original_assets/"textures").glob("*_"+suffix))]
     if missing_ui:
-        raise SystemExit("Original combat UI/arm textures missing: "+", ".join(missing_ui))
+        raise SystemExit("Original combat UI/arm textures missing by asset name: "+", ".join(missing_ui))
     for ref_name in ("UNITY_SCENE_OBJECTS.json","UNITY_ASSET_AUDIT.json","UNITY_MATERIAL_PROPERTIES.json","UNITY_OBJECT_CATALOG.csv"):
         source=pathlib.Path("unity_audit")/ref_name
         if source.is_file():
