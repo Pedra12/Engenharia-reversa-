@@ -74,6 +74,22 @@ def vec2(v, fallback):
  except Exception:
   if isinstance(v,dict): return {"x":float(v.get("x",fallback["x"])),"y":float(v.get("y",fallback["y"]))}
   return dict(fallback)
+def material_color_properties(data):
+ """Extract exact Unity Material m_SavedProperties.m_Colors values."""
+ saved=attr(data,"m_SavedProperties"); colors=attr(saved,"m_Colors") or []; out=[]
+ for entry in colors:
+  key=attr(entry,"first"); value=attr(entry,"second")
+  if value is None and isinstance(entry,(list,tuple)) and len(entry)>=2: key,value=entry[0],entry[1]
+  if value is None: continue
+  rgba={}
+  for channel,default in (("r",1.0),("g",1.0),("b",1.0),("a",1.0)):
+   try: rgba[channel]=float(getattr(value,channel))
+   except Exception:
+    try: rgba[channel]=float(value.get(channel,default))
+    except Exception: rgba[channel]=default
+  out.append({"property":str(key or ""),"value":rgba})
+ return out
+
 def material_uv_transforms(data):
  """Extract Unity Material m_SavedProperties.m_TexEnvs scale/offset per texture slot."""
  saved=attr(data,"m_SavedProperties"); envs=attr(saved,"m_TexEnvs") or []; out=[]
@@ -198,6 +214,7 @@ def main():
        r["refs"].append({"field":f,"file_id":fid,"path_id":p["path_id"],"target_source":target_source})
      if t=="Material":
       r["unity_uv_transforms"]=material_uv_transforms(d)
+      r["unity_color_properties"]=material_color_properties(d)
       saved=attr(d,"m_SavedProperties")
       for prop in ("m_TexEnvs",):
        for p in refs(attr(saved,prop)):
@@ -261,6 +278,7 @@ def main():
          "source":target_source,"path_id":ref["path_id"],"name":material["name"],
          "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],
          "unity_uv_transforms":material.get("unity_uv_transforms",[]),
+         "unity_color_properties":material.get("unity_color_properties",[]),
          "shader_refs":[{"source":x.get("target_source"),"path_id":x["path_id"]} for x in material.get("refs",[]) if x["field"]=="m_Shader"]
         })
      return info
