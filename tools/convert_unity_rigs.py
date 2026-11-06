@@ -105,10 +105,36 @@ def quat(v):
     if isinstance(v,(list,tuple)): return [float(x) for x in v[:4]]
     return [0,0,0,1]
 
+def position3(v,default=(0,0,0)):
+    out=vec3(v,default)
+    out[0]=-out[0]
+    return out
+
+def quat_godot(v):
+    q=quat(v)
+    return [q[0],-q[1],-q[2],q[3]]
+
+def bindpose_godot(value):
+    matrix=value.get("matrix4x4",value) if isinstance(value,dict) else value
+    if isinstance(matrix,(list,tuple)) and len(matrix)==16 and not isinstance(matrix[0],(list,tuple)):
+        matrix=[matrix[i:i+4] for i in range(0,16,4)]
+    if not isinstance(matrix,(list,tuple)) or len(matrix)<4:
+        return matrix
+    # UnityPy exports mesh vertices with X mirrored. Conjugate inverse-bind
+    # matrices by the same reflection S=diag(-1,1,1,1): M_godot = S*M_unity*S.
+    result=[]
+    for i in range(4):
+        row=[]
+        for j in range(4):
+            sign=(-1.0 if i==0 else 1.0)*(-1.0 if j==0 else 1.0)
+            row.append(float(matrix[i][j])*sign)
+        result.append(row)
+    return result
+
 def transform_record(rec):
     if not rec: return {"position":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1],"name":""}
     f=rec.get("fields",{})
-    return {"position":vec3(f.get("m_LocalPosition")),"rotation":quat(f.get("m_LocalRotation")),
+    return {"position":position3(f.get("m_LocalPosition")),"rotation":quat_godot(f.get("m_LocalRotation")),
             "scale":vec3(f.get("m_LocalScale",(1,1,1)),(1,1,1)),
             "name":rec.get("name",""),"path_id":rec.get("path_id"),"source":rec.get("source")}
 
@@ -126,12 +152,12 @@ def build_rig(mesh_record,avatar_record,rig_hierarchy,mesh_path,texture_paths):
         parent=int(avatar_nodes[i].get("m_ParentId",-1))
         p=avatar_pose[i]
         bones.append({"name":short,"path":path,"hash":int(h),"parent":parent,
-            "position":vec3(p.get("t")),"rotation":quat(p.get("q")),"scale":vec3(p.get("s"),(1,1,1))})
+            "position":position3(p.get("t")),"rotation":quat_godot(p.get("q")),"scale":vec3(p.get("s"),(1,1,1))})
     hashes=[int(x) for x in f.get("m_BoneNameHashes",[])]
     mesh_bone_to_avatar=[id_to_index.get(h,0) for h in hashes]
     bindposes=[]
     for bp in f.get("m_BindPose",[]):
-        bindposes.append(bp.get("matrix4x4",bp) if isinstance(bp,dict) else bp)
+        bindposes.append(bindpose_godot(bp))
     if len(bindposes)!=len(mesh_bone_to_avatar):
         raise ValueError(f"{mesh_record['name']}: bind pose count {len(bindposes)} != mesh bone count {len(mesh_bone_to_avatar)}")
     vertex_count,weights,bone_indices=decode_skin(f)
