@@ -382,7 +382,7 @@ def main():
                     "name":comp.get("name","") if comp else "","resolved":bool(comp)}
                 if comp:
                     component["fields"]=comp.get("fields",{})
-                    serialized=comp.get("serialized_fields",{}) if comp.get("type")=="MonoBehaviour" else {}
+                    serialized=comp.get("serialized_fields",{}) if comp.get("type") in ("MonoBehaviour","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable") else {}
                     component["serialized_fields"]=serialized
                     script_ptr=serialized.get("m_Script",{}) if isinstance(serialized,dict) else {}
                     if isinstance(script_ptr,dict) and script_ptr.get("m_PathID"):
