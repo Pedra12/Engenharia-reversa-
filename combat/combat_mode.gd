@@ -2,6 +2,7 @@ extends Node3D
 
 const BOT_SCRIPT = preload("res://combat/combat_bot.gd")
 const RIG_LOADER_SCRIPT = preload("res://combat/original_rig_loader.gd")
+const ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_animation_player.gd")
 const UMP_MESH_PATH = "res://assets/combat_source/meshes/UMP_45_2.obj"
 const SOLDIER_TEXTURE_PATH = "res://assets/combat_source/textures/SimpleMilitary_Soldier01_Black_-6561600483854028127.png"
 const UMP_TEXTURE_PATH = "res://assets/combat_source/textures/UMP_45_Diffuse_-7805003812694618604.png"
@@ -19,6 +20,9 @@ var weapon_mesh: MeshInstance3D
 var rig_loader: OriginalRigLoader
 var player_fp_rig: Dictionary
 var player_weapon_attachment: BoneAttachment3D
+var player_animation_player: OriginalAnimationPlayer
+var player_animation_lock := 0.0
+var current_player_animation := ""
 var weapon_material: StandardMaterial3D
 var hud: Control
 var health_label: Label
@@ -145,6 +149,21 @@ func _create_player() -> void:
 	if player_fp_rig.is_empty():
 		push_error("Original first-person hand rig could not be created.")
 	else:
+		player_animation_player = ANIMATION_PLAYER_SCRIPT.new()
+		camera.add_child(player_animation_player)
+		var hand_retarget := rig_loader.build_retarget_map("sk_char_sold_male_01", "sk_gloves", {
+			"upperarm_l": "DEF-upper_arm.L",
+			"lowerarm_l": "DEF-forearm.L",
+			"hand_l": "DEF-hand.L",
+			"upperarm_r": "DEF-upper_arm.R",
+			"lowerarm_r": "DEF-forearm.R",
+			"hand_r": "DEF-hand.R"
+		})
+		player_animation_player.setup(player_fp_rig["skeleton"], hand_retarget)
+		if player_animation_player.has_clip("Rifle_Idle_gun_down"):
+			player_animation_player.play("Rifle_Idle_gun_down")
+		else:
+			player_animation_player.play("Idle")
 		player_weapon_attachment = rig_loader.create_bone_attachment(player_fp_rig["skeleton"], "DEF-hand.R", "OriginalWeaponSocket")
 		weapon_mount = Node3D.new()
 		weapon_mount.name = "WeaponMount"
@@ -310,6 +329,7 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
+	player_animation_lock = maxf(0.0, player_animation_lock - delta)
 	if auto_fire_enabled and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
 		if _find_auto_fire_target():
 			_fire()
@@ -345,6 +365,17 @@ func _physics_process(delta: float) -> void:
 	player.velocity.x = direction.x * speed
 	player.velocity.z = direction.z * speed
 	player.move_and_slide()
+	if player_animation_player and player_animation_lock <= 0.0:
+		var desired_animation := "Rifle_Idle_gun_down"
+		if aiming and player_animation_player.has_clip("zoom_idle"):
+			desired_animation = "zoom_idle"
+		elif direction.length() > 0.15:
+			desired_animation = "front_run" if speed >= 4.5 else "front_walk"
+		if not player_animation_player.has_clip(desired_animation):
+			desired_animation = "Idle"
+		if desired_animation != current_player_animation:
+			current_player_animation = desired_animation
+			player_animation_player.play(desired_animation, 0.14, 1.0)
 	if direction.length() > 0.15:
 		footstep_timer -= delta
 		if footstep_timer <= 0.0 and grass_player and not grass_player.playing:
@@ -372,6 +403,10 @@ func _fire() -> void:
 		return
 	ammo -= 1
 	fire_cooldown = 0.12
+	if player_animation_player and player_animation_player.has_clip("Fire"):
+		player_animation_player.play("Fire", 0.04, 1.0, false)
+		player_animation_lock = 0.28
+		current_player_animation = ""
 	weapon_mount.position.z = -0.44
 	var tween = create_tween()
 	tween.tween_property(weapon_mount, "position:z", -0.52, 0.09)
@@ -435,6 +470,10 @@ func _reload() -> void:
 	if reload_timer > 0.0 or ammo >= 30 or reserve_ammo <= 0:
 		return
 	reload_timer = 1.35
+	if player_animation_player and player_animation_player.has_clip("Reload"):
+		player_animation_player.play("Reload", 0.05, 1.0, false)
+		player_animation_lock = 1.25
+		current_player_animation = ""
 	status_label.text = "RECARREGANDO..."
 	if reload_player:
 		reload_player.play()
@@ -442,6 +481,11 @@ func _reload() -> void:
 func _toggle_aim() -> void:
 	aiming = not aiming
 	camera.fov = 54.0 if aiming else 70.0
+	if player_animation_player:
+		var aim_clip := "zoom_idle" if aiming else "Rifle_Idle_gun_down"
+		if player_animation_player.has_clip(aim_clip):
+			player_animation_player.play(aim_clip, 0.14, 1.0)
+			current_player_animation = aim_clip
 	status_label.text = "MIRA ATIVADA" if aiming else "MODO DE DISPARO"
 
 func _jump() -> void:
