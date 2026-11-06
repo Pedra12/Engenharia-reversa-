@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Reconstrói arquivos Unity divididos em .splitN e extrai objetos via UnityPy."""
-import zipfile, pathlib, tempfile, json, csv, re, collections, os, hashlib
+import zipfile, pathlib, tempfile, json, csv, re, collections, os, hashlib, base64
 from pathlib import PurePosixPath
 ARCHIVE=pathlib.Path("blockgun.zip")
 OUT=pathlib.Path("unity_audit"); OUT.mkdir(exist_ok=True)
 EXPORT=OUT/"exported"; EXPORT.mkdir(exist_ok=True)
 rows=[]; errors=[]; counts=collections.Counter(); previews=[]
-skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; library_rows=[]
+skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; scene_records=[]; library_rows=[]
 DATA_PREFIX="resources/assets/bin/Data/"
 
 def safe(s):
@@ -21,7 +21,9 @@ def json_safe(value, depth=0):
     if value is None or isinstance(value,(str,int,float,bool)):
         return value
     if isinstance(value,bytes):
-        return {"byte_length":len(value)}
+        if len(value) <= 16 * 1024 * 1024:
+            return {"byte_length":len(value),"base64":base64.b64encode(value).decode("ascii")}
+        return {"byte_length":len(value),"base64_omitted":True}
     if isinstance(value,(list,tuple)):
         return [json_safe(v,depth+1) for v in value]
     if isinstance(value,dict):
@@ -99,7 +101,7 @@ def main():
                     base=safe(pathlib.Path(source).stem)+"_"+safe(typ)+"_"+safe(name or pid)
                     if typ=="Mesh" and (str(name).startswith("sk_char_") or str(name) in ("sk_gloves","sk_bomb_fp")):
                         skin_records.append({"source":source,"path_id":str(pid),"name":str(name),
-                          "fields":selected_fields(data,["m_Vertices","m_Normals","m_UV0","m_Skin","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_SubMeshes"])})
+                          "fields":selected_fields(data,["m_Vertices","m_Normals","m_UV0","m_UV1","m_Skin","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_SubMeshes","m_Indices","m_VertexData","m_CompressedMesh"])})
                     elif typ=="AnimationClip":
                         animation_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_SampleRate","m_Legacy","m_Compressed","m_UseHighQualityCurve","m_RotationCurves","m_PositionCurves","m_ScaleCurves","m_FloatCurves","m_PPtrCurves","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings"])})
@@ -109,6 +111,29 @@ def main():
                     elif typ=="Avatar":
                         avatar_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_Avatar","m_TOS","m_Name"])})
+                    scene_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera")
+                    if typ in scene_types:
+                        fields_by_type={
+                          "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name"],
+                          "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale"],
+                          "RectTransform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_AnchorMin","m_AnchorMax","m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_Pivot"],
+                          "Canvas":["m_GameObject","m_Enabled","m_RenderMode","m_Camera","m_SortingOrder","m_TargetDisplay"],
+                          "CanvasRenderer":["m_GameObject","m_CullTransparentMesh"],
+                          "MonoBehaviour":["m_GameObject","m_Enabled","m_Script"],
+                          "MeshFilter":["m_GameObject","m_Mesh"],
+                          "MeshRenderer":["m_GameObject","m_Enabled","m_Materials"],
+                          "SkinnedMeshRenderer":["m_GameObject","m_Enabled","m_Materials","m_Mesh","m_Bones","m_RootBone","m_LocalAABB"],
+                          "Animator":["m_GameObject","m_Enabled","m_Avatar","m_Controller","m_ApplyRootMotion","m_UpdateMode","m_CullingMode"],
+                          "SpriteRenderer":["m_GameObject","m_Enabled","m_Sprite","m_Color"],
+                          "AudioSource":["m_GameObject","m_Enabled","m_audioClip","m_Volume","m_Pitch","m_Loop","m_PlayOnAwake"],
+                          "Camera":["m_GameObject","m_Enabled","m_FieldOfView","m_NearClipPlane","m_FarClipPlane"]
+                        }
+                        record={"source":source,"path_id":str(pid),"type":typ,"name":str(name)[:250],
+                                "fields":selected_fields(data,fields_by_type.get(typ,[]))}
+                        if typ=="MonoBehaviour":
+                            try: record["serialized_fields"]=json_safe(obj.read_typetree())
+                            except Exception as e: record["typetree_error"]=str(e)[:200]
+                        scene_records.append(record)
                     if typ in ("Texture2D","Sprite"):
                         try:
                             im=data.image
@@ -181,6 +206,7 @@ def main():
             blob=source_zip.read(n); save(dest,blob)
             library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
     (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
+    (OUT/"UNITY_SCENE_OBJECTS.json").write_text(json.dumps(scene_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATOR_DATA.json").write_text(json.dumps({"controllers":controller_records,"avatars":avatar_records},ensure_ascii=False,indent=2),encoding="utf-8")
     with open(OUT/"GAMEPLAY_ASSET_LIBRARY.csv","w",newline="",encoding="utf-8") as f:
