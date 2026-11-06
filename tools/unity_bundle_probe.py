@@ -185,6 +185,8 @@ def main():
     ap.add_argument("--worker",nargs=2)
     ap.add_argument("--types",default="")
     ap.add_argument("--ids",default="")
+    ap.add_argument("bundles_pos",nargs="?")
+    ap.add_argument("out_pos",nargs="?")
     ap.add_argument("--bundles",default="unity_audit")
     ap.add_argument("--out",default="unity_audit/bundle_probe")
     args=ap.parse_args()
@@ -192,7 +194,7 @@ def main():
         manifest(pathlib.Path(args.manifest[0]),pathlib.Path(args.manifest[1]));return
     if args.worker:
         worker(pathlib.Path(args.worker[0]),pathlib.Path(args.worker[1]),[x for x in args.types.split(",") if x],[x for x in args.ids.split(",") if x]);return
-    root=pathlib.Path(args.bundles);out=pathlib.Path(args.out);out.mkdir(parents=True,exist_ok=True)
+    root=pathlib.Path(args.bundles_pos or args.bundles);out=pathlib.Path(args.out_pos or args.out);out.mkdir(parents=True,exist_ok=True)
     candidates=[p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (".bundle",".bund",".assetbundle")]
     summary=[]
     for bundle in candidates:
