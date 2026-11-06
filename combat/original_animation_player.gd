@@ -110,5 +110,6 @@ func _process(delta: float) -> void:
 	for bone_index in targets:
 		var target_q: Quaternion = targets[bone_index]
 		if blend_alpha < 1.0 and _blend_from.has(bone_index):
-			target_q = (_blend_from[bone_index] as Quaternion).slerp(target_q, blend_alpha).normalized()
+			var from_q: Quaternion = _blend_from[bone_index]
+			target_q = from_q.slerp(target_q, blend_alpha).normalized()
 		skeleton.set_bone_pose_rotation(int(bone_index), target_q)
