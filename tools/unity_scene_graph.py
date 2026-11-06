@@ -197,6 +197,7 @@ def main():
        target_source=src if fid==0 else (paths[fid-1] if 0 < fid <= len(paths) else "")
        r["refs"].append({"field":f,"file_id":fid,"path_id":p["path_id"],"target_source":target_source})
      if t=="Material":
+      r["unity_uv_transforms"]=material_uv_transforms(d)
       saved=attr(d,"m_SavedProperties")
       for prop in ("m_TexEnvs",):
        for p in refs(attr(saved,prop)):
@@ -258,7 +259,8 @@ def main():
        if material:
         info.setdefault("material_resources",[]).append({
          "source":target_source,"path_id":ref["path_id"],"name":material["name"],
-         "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],\n         "unity_uv_transforms":material.get("unity_uv_transforms",[]),
+         "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],
+         "unity_uv_transforms":material.get("unity_uv_transforms",[]),
          "shader_refs":[{"source":x.get("target_source"),"path_id":x["path_id"]} for x in material.get("refs",[]) if x["field"]=="m_Shader"]
         })
      return info
