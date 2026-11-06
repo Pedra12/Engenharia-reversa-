@@ -371,8 +371,28 @@ def main():
                 csrc=resolve_record_source(gsrc,go.get("external_files",[]),ptr)
                 cid=str(ptr.get("m_PathID","0"))
                 comp=next((x for x in scene_records if x.get("source")==csrc and str(x.get("path_id"))==cid),None)
-                components.append({"source":csrc,"path_id":cid,"type":comp.get("type","") if comp else "",
-                    "name":comp.get("name","") if comp else "","resolved":bool(comp)})
+                component={"source":csrc,"path_id":cid,"type":comp.get("type","") if comp else "",
+                    "name":comp.get("name","") if comp else "","resolved":bool(comp)}
+                if comp:
+                    component["fields"]=comp.get("fields",{})
+                    serialized=comp.get("serialized_fields",{}) if comp.get("type")=="MonoBehaviour" else {}
+                    component["serialized_fields"]=serialized
+                    script_ptr=serialized.get("m_Script",{}) if isinstance(serialized,dict) else {}
+                    if isinstance(script_ptr,dict) and script_ptr.get("m_PathID"):
+                        script_source=resolve_record_source(csrc,comp.get("external_files",[]),script_ptr)
+                        script_row=catalog_by_key.get((script_source,str(script_ptr.get("m_PathID"))))
+                        component["script_name"]=script_row.get("name","") if script_row else ""
+                    for sprite_field in ("m_Sprite","m_OverrideSprite","m_SpriteState"):
+                        sprite_ptr=serialized.get(sprite_field,{}) if isinstance(serialized,dict) else {}
+                        if isinstance(sprite_ptr,dict) and sprite_ptr.get("m_PathID"):
+                            sprite_source=resolve_record_source(csrc,comp.get("external_files",[]),sprite_ptr)
+                            sprite_row=catalog_by_key.get((sprite_source,str(sprite_ptr.get("m_PathID"))))
+                            if sprite_row:
+                                component["sprite_name"]=sprite_row.get("name","")
+                                component["sprite_exported"]=sprite_row.get("exported","")
+                                component["sprite_source"]=sprite_source
+                                break
+                components.append(component)
             rect={k:tf[k] for k in ("m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_AnchorMin","m_AnchorMax","m_Pivot","m_LocalPosition","m_LocalRotation","m_LocalScale") if k in tf}
             hud_elements.append({"source":gsrc,"path_id":gid,"name":name,"path":path,"parent_path":parent_path,
                 "depth":depth,"active":go.get("fields",{}).get("m_IsActive",True),"layer":go.get("fields",{}).get("m_Layer",0),
