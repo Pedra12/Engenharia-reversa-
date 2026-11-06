@@ -58,7 +58,7 @@ old_return = """    # All map materials use preprocessed textures; no procedural
 new_return = """    # Do not replace a valid imported GLB/OBJ material with a generic grey
     # StandardMaterial when the Unity reference has no recovered texture.
     # Preserve only explicit special shader behavior in that case.
-    var special_material=material_name=="m_atlas_environment_alpha" or material_name=="m_water" or material_name=="water"
+    var special_material=material_name=="m_atlas_environment_alpha" or material_name=="m_water" or material_name=="water" or material_name=="unlit"
     if sm.albedo_texture==null and not special_material:
         return null
     # All map materials use preprocessed textures; no procedural India shader at runtime.
