@@ -97,7 +97,9 @@ func _process(delta: float) -> void:
 	var targets: Dictionary = {}
 	for item in a:
 		var source_bone_index := int(item[0])
-		var bone_index := int(_bone_map.get(source_bone_index, source_bone_index))
+		if not _bone_map.is_empty() and not _bone_map.has(source_bone_index):
+			continue
+		var bone_index := int(_bone_map[source_bone_index]) if _bone_map.has(source_bone_index) else source_bone_index
 		if bone_index < 0 or bone_index >= skeleton.get_bone_count():
 			continue
 		var qa := Quaternion(float(item[1]), float(item[2]), float(item[3]), float(item[4]))
