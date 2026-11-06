@@ -1356,9 +1356,6 @@ func _lighting():
     sun.light_energy=1.1
     add_child(sun)
 '''
-    gd=gd.replace('    home_box.add_child(play)\\n', '    home_box.add_child(play)\\n    var battle=Button.new()\\n    battle.text="INICIAR BATALHA | FLORESTA"\\n    battle.custom_minimum_size=Vector2(0,58)\\n    battle.add_theme_font_size_override("font_size",19)\\n    battle.pressed.connect(_start_combat)\\n    home_box.add_child(battle)\\n')
-    gd=gd.replace('var jump_button:Button\\nfunc _ready():', 'var jump_button:Button\\nvar combat_session:Node3D\\nfunc _ready():')
-    gd=gd.replace('func _show_home():', 'func _start_combat():\\n    if is_instance_valid(combat_session) or not is_instance_valid(world):\\n        return\\n    home_panel.visible=false\\n    selection_panel.visible=false\\n    tutorial_panel.visible=false\\n    map_label.visible=false\\n    map_actions.visible=false\\n    combat_session=Node3D.new()\\n    combat_session.name="FlorestaCombatSession"\\n    combat_session.set_script(load("res://combat/combat_mode.gd"))\\n    add_child(combat_session)\\n    combat_session.call_deferred("begin",world,Callable(self,"_end_combat"))\\nfunc _end_combat():\\n    if is_instance_valid(combat_session):\\n        combat_session.queue_free()\\n    combat_session=null\\n    if is_instance_valid(camera):\\n        camera.current=true\\n    _show_home()\\nfunc _show_home():')
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
     readme="# Block Gun | Explorador 3D de mapas\n\nAPK de visualização técnica dos nove mapas recuperados do Unity. A câmera enquadra automaticamente a geometria encontrada; arraste com um dedo para orbitar e use pinça para aproximar ou afastar. O botão reenquadra o mapa.\n\nAinda não contém personagem, bots ou gameplay. A completude de cada cenário depende dos modelos e texturas que puderam ser recuperados do arquivo original.\n"
     (PROJECT/"README.md").write_text(readme,encoding="utf-8")
