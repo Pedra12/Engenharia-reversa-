@@ -90,10 +90,11 @@ func _physics_process(delta: float) -> void:
 			locomotion = "Idle"
 		if locomotion != current_locomotion:
 			current_locomotion = locomotion
-			anim_player.play(locomotion, 0.16, 1.0, locomotion != "Rifle_Idle_gun_down" and locomotion != "Idle")
+			anim_player.play(locomotion, 0.16, 1.0)
 	if distance < 24.0 and shoot_cooldown <= 0.0 and is_instance_valid(combat):
 		shoot_cooldown = 1.15
 		shoot_animation_timer = 0.32
+		current_locomotion = ""
 		if anim_player and anim_player.has_clip("Fire"):
 			anim_player.play("Fire", 0.06, 1.0, false)
 		combat.call("bot_shoot", self)
