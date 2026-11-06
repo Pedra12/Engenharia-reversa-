@@ -854,10 +854,19 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
             # into assets/textures; this path is recorded in the generated manifest.
             var texture_path=String(t.get("godot_texture_path",""))
             if texture_path=="":
+                if india_detail:
+                    push_error("INDIA_TEXTURE_RESOURCE_MISSING material="+material_name+" source="+source_png+" reason=manifest_path_empty")
+                    return null
                 texture_path="res://assets/textures/"+source_png.get_file()
+            if india_detail and not ResourceLoader.exists(texture_path):
+                push_error("INDIA_TEXTURE_RESOURCE_MISSING material="+material_name+" path="+texture_path)
+                return null
             var tx=load(texture_path) as Texture2D
             if tx:
                 sm.albedo_texture=tx
+            elif india_detail:
+                push_error("INDIA_TEXTURE_RESOURCE_MISSING material="+material_name+" path="+texture_path+" reason=load_failed")
+                return null
                 # Unity atlas transform recovered from Material.m_SavedProperties.
                 var uv:Dictionary=t.get("unity_uv_transform",{})
                 var sc:Dictionary=uv.get("Mscale",{})
