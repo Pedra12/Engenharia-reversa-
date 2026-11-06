@@ -54,7 +54,7 @@ func _physics_process(delta: float) -> void:
 	if distance < 24.0 and fire_wait <= 0.0:
 		fire_wait = randf_range(1.1, 1.7)
 		if is_instance_valid(combat):
-			combat.bot_shoot(self)
+			combat.call("bot_shoot", self)
 
 func take_damage(amount: int) -> bool:
 	health = maxi(0, health - amount)
