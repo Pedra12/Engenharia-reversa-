@@ -15,6 +15,17 @@ def safe(s):
 def save(path,data):
     path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(data)
 
+def source_label(obj):
+    af=getattr(obj,"assets_file",None)
+    for owner in (af,getattr(af,"file",None) if af is not None else None):
+        if owner is None: continue
+        for attr in ("name","path","file_name","filename"):
+            try:
+                value=getattr(owner,attr,None)
+                if isinstance(value,str) and value and value!="<SerializedFile>":
+                    return value
+            except Exception: pass
+    return str(af or "")
 def json_safe(value, depth=0):
     if depth > 10:
         return str(value)
@@ -28,6 +39,23 @@ def json_safe(value, depth=0):
         return [json_safe(v,depth+1) for v in value]
     if isinstance(value,dict):
         return {str(k):json_safe(v,depth+1) for k,v in value.items()}
+    if hasattr(value,"m_FileID") and hasattr(value,"m_PathID"):
+        return {"m_FileID":int(getattr(value,"m_FileID",0) or 0),"m_PathID":int(getattr(value,"m_PathID",0) or 0)}
+    if all(hasattr(value,f"e{i}{j}") for i in range(4) for j in range(4)):
+        return {"matrix4x4":[[float(getattr(value,f"e{i}{j}")) for j in range(4)] for i in range(4)]}
+    if hasattr(value,"component"):
+        return {"component":json_safe(getattr(value,"component"),depth+1)}
+    cls=value.__class__.__name__
+    if cls=="VertexData":
+        data=getattr(value,"m_DataSize",b"") or b""
+        channels=[]
+        for ch in (getattr(value,"m_Channels",[]) or []):
+            channels.append({k:int(getattr(ch,k,0) or 0) for k in ("stream","offset","format","dimension")})
+        return {"type":"VertexData","m_VertexCount":int(getattr(value,"m_VertexCount",0) or 0),
+                "m_Channels":channels,"m_DataSize":json_safe(data,depth+1)}
+    if cls=="BoneWeights4":
+        return {"weight":json_safe(getattr(value,"weight",[]),depth+1),
+                "boneIndex":json_safe(getattr(value,"boneIndex",[]),depth+1)}
     if hasattr(value,"__dict__"):
         return {str(k):json_safe(v,depth+1) for k,v in vars(value).items() if k not in ("reader","assets_file")}
     return str(value)
@@ -95,7 +123,7 @@ def main():
                     data=obj.read()
                     name=getattr(data,"m_Name","") or getattr(data,"name","") or ""
                     pid=getattr(obj,"path_id",idx)
-                    source=str(getattr(obj,"assets_file",None) or "")
+                    source=source_label(obj)
                     row={"source":source[:220],"path_id":str(pid),"type":typ,"name":str(name)[:250],"status":"metadata"}
                     counts[typ]+=1
                     base=safe(pathlib.Path(source).stem)+"_"+safe(typ)+"_"+safe(name or pid)
