@@ -409,7 +409,7 @@ func _show_damage(amount: int, headshot: bool) -> void:
 	tween.tween_property(hit_label, "position", Vector2(-80, -108), 0.42)
 	tween.tween_callback(func(): hit_label.visible = false)
 
-func bot_shoot(bot: Node3D) -> void:
+func bot_shoot(bot: CharacterBody3D) -> void:
 	if dead_timer > 0.0 or not is_instance_valid(player):
 		return
 	var from = bot.global_position + Vector3.UP * 1.35
