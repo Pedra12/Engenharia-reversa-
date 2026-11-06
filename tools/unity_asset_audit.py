@@ -348,6 +348,41 @@ def main():
             "materials":fields.get("m_Materials",[])})
     (OUT/"UNITY_RIG_HIERARCHY.json").write_text(json.dumps({"renderers":rig_renderers,
         "transforms":list(included_transforms.values()),"gameobjects":list(included_gameobjects.values())},ensure_ascii=False,indent=2),encoding="utf-8")
+    # Export the complete original gameplay HUD hierarchy and exact RectTransform layout.
+    hud_root=next((r for r in scene_records if r.get("type")=="GameObject" and r.get("name")=="WindowPlayer"),None)
+    hud_elements=[]
+    if hud_root:
+        hud_source=hud_root.get("source","")
+        def walk_hud(src,transform_id,parent_path="",depth=0):
+            if depth>32: return
+            tr=transform_by_key.get((src,str(transform_id)))
+            if not tr: return
+            tf=tr.get("fields",{})
+            gp=tf.get("m_GameObject",{})
+            gsrc=resolve_record_source(src,tr.get("external_files",[]),gp)
+            gid=str(gp.get("m_PathID","0"))
+            go=gameobject_by_key.get((gsrc,gid))
+            if not go: return
+            name=go.get("name","")
+            path=(parent_path+"/"+name).strip("/")
+            components=[]
+            for pair in go.get("fields",{}).get("m_Component",[]) or []:
+                ptr=pair.get("component",{})
+                csrc=resolve_record_source(gsrc,go.get("external_files",[]),ptr)
+                cid=str(ptr.get("m_PathID","0"))
+                comp=next((x for x in scene_records if x.get("source")==csrc and str(x.get("path_id"))==cid),None)
+                components.append({"source":csrc,"path_id":cid,"type":comp.get("type","") if comp else "",
+                    "name":comp.get("name","") if comp else "","resolved":bool(comp)})
+            rect={k:tf[k] for k in ("m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_AnchorMin","m_AnchorMax","m_Pivot","m_LocalPosition","m_LocalRotation","m_LocalScale") if k in tf}
+            hud_elements.append({"source":gsrc,"path_id":gid,"name":name,"path":path,"parent_path":parent_path,
+                "depth":depth,"active":go.get("fields",{}).get("m_IsActive",True),"layer":go.get("fields",{}).get("m_Layer",0),
+                "rect":rect,"components":components})
+            for child in tf.get("m_Children",[]) or []:
+                csrc=resolve_record_source(src,tr.get("external_files",[]),child)
+                walk_hud(csrc,child.get("m_PathID","0"),path,depth+1)
+        root_transform=transform_by_go.get((hud_source,str(hud_root.get("path_id"))))
+        if root_transform: walk_hud(hud_source,root_transform.get("path_id","0"))
+    (OUT/"UNITY_HUD_LAYOUT.json").write_text(json.dumps({"root":"WindowPlayer","elements":hud_elements},ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_SCENE_OBJECTS.json").write_text(json.dumps(scene_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
