@@ -195,7 +195,7 @@ func _create_bots() -> void:
 		bot.name = "BotSoldier_%02d" % (index + 1)
 		map_root.add_child(bot)
 		bot.global_position = floor_hit.position + Vector3.UP * 0.12
-		bot.configure(player, self, soldier_mesh, soldier_material)
+		bot.call("configure", player, self, soldier_mesh, soldier_material)
 	print("COMBAT_BOTS_SPAWNED count=", map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false).size())
 
 func _build_hud() -> void:
