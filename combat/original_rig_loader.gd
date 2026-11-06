@@ -98,6 +98,24 @@ func create_rig(parent: Node3D, rig_name: String, apply_model_parent: bool = fal
 		"rig_data": rig
 	}
 
+func get_bone_index(rig_name: String, bone_name: String) -> int:
+	if not _load_database() or not _database.has(rig_name):
+		return -1
+	var bones: Array = _database[rig_name].get("bones", [])
+	for i in range(bones.size()):
+		if String(bones[i].get("name", "")) == bone_name:
+			return i
+	return -1
+
+func build_retarget_map(source_rig: String, target_rig: String, pairs: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for source_name in pairs:
+		var source_index := get_bone_index(source_rig, String(source_name))
+		var target_index := get_bone_index(target_rig, String(pairs[source_name]))
+		if source_index >= 0 and target_index >= 0:
+			result[source_index] = target_index
+	return result
+
 func create_bone_attachment(skeleton: Skeleton3D, bone_name: String, attachment_name: String = "WeaponSocket") -> BoneAttachment3D:
 	var attachment := BoneAttachment3D.new()
 	attachment.name = attachment_name
