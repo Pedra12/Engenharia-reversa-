@@ -44,7 +44,7 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	add_child(anim_player)
 	anim_player.setup(skeleton)
 	if anim_player.has_clip("Rifle_Idle_gun_down"):
-		anim_player.play("Rifle_Idle_gun_down")
+		anim_player.play("Rifle_Idle_gun_down", 0.14, 1.0, true)
 	else:
 		anim_player.play("Idle")
 	weapon_mount = Node3D.new()
@@ -90,7 +90,7 @@ func _physics_process(delta: float) -> void:
 			locomotion = "Idle"
 		if locomotion != current_locomotion:
 			current_locomotion = locomotion
-			anim_player.play(locomotion, 0.16, 1.0)
+			anim_player.play(locomotion, 0.16, 1.0, true)
 	if distance < 24.0 and shoot_cooldown <= 0.0 and is_instance_valid(combat):
 		shoot_cooldown = 1.15
 		shoot_animation_timer = 0.32
