@@ -14,9 +14,11 @@ var _loop := true
 var _blend_duration := 0.14
 var _blend_elapsed := 0.0
 var _blend_from: Dictionary = {}
+var _bone_map: Dictionary = {}
 
-func setup(target_skeleton: Skeleton3D) -> void:
+func setup(target_skeleton: Skeleton3D, bone_map: Dictionary = {}) -> void:
 	skeleton = target_skeleton
+	_bone_map = bone_map.duplicate()
 	_load_data()
 
 func _load_data() -> void:
@@ -94,7 +96,8 @@ func _process(delta: float) -> void:
 		b_map[int(item[0])] = item
 	var targets: Dictionary = {}
 	for item in a:
-		var bone_index := int(item[0])
+		var source_bone_index := int(item[0])
+		var bone_index := int(_bone_map.get(source_bone_index, source_bone_index))
 		if bone_index < 0 or bone_index >= skeleton.get_bone_count():
 			continue
 		var qa := Quaternion(float(item[1]), float(item[2]), float(item[3]), float(item[4]))
