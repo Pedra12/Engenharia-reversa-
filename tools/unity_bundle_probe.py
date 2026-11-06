@@ -5,7 +5,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent))
 import unity_asset_audit as audit
 
-SCENE_TYPES=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification")
+SCENE_TYPES=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","AudioListener","Camera","ParticleSystem","ParticleSystemRenderer","Light","TrailRenderer","LineRenderer","Rigidbody","BoxCollider","SphereCollider","CapsuleCollider","MeshCollider","CharacterController","LODGroup","Animation","PrefabInstance","PrefabModification","PropertyModification")
 FIELDS={
  "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
  "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
@@ -19,8 +19,22 @@ FIELDS={
  "SkinnedMeshRenderer":["m_GameObject","m_Enabled","m_Materials","m_Mesh","m_Bones","m_RootBone","m_LocalAABB"],
  "Animator":["m_GameObject","m_Enabled","m_Avatar","m_Controller","m_ApplyRootMotion","m_UpdateMode","m_CullingMode"],
  "SpriteRenderer":["m_GameObject","m_Enabled","m_Sprite","m_Color"],
- "AudioSource":["m_GameObject","m_Enabled","m_audioClip","m_Volume","m_Pitch","m_Loop","m_PlayOnAwake"],
+ "AudioSource":["m_GameObject","m_Enabled","m_audioClip","m_Volume","m_Pitch","m_Loop","m_PlayOnAwake","m_Spatialize","m_SpatialBlend"],
+ "AudioListener":["m_GameObject","m_Enabled"],
  "Camera":["m_GameObject","m_Enabled","m_FieldOfView","m_NearClipPlane","m_FarClipPlane"],
+ "ParticleSystem":["m_GameObject","m_Enabled","lengthInSec","looping","prewarm","playOnAwake","moveWithTransform","simulationSpace","scalingMode","startDelay","startLifetime","startSpeed","startSize","startColor","gravityModifier","maxParticles","emission","shape","sizeOverLifetime","colorOverLifetime"],
+ "ParticleSystemRenderer":["m_GameObject","m_Enabled","m_Materials","m_RenderMode","m_SortingFudge","m_MinParticleSize","m_MaxParticleSize"],
+ "Light":["m_GameObject","m_Enabled","m_Type","m_Color","m_Intensity","m_Range","m_SpotAngle"],
+ "TrailRenderer":["m_GameObject","m_Enabled","m_Time","m_StartWidth","m_EndWidth","m_Materials"],
+ "LineRenderer":["m_GameObject","m_Enabled","m_PositionCount","m_StartWidth","m_EndWidth","m_Materials"],
+ "Rigidbody":["m_GameObject","m_Mass","m_Drag","m_AngularDrag","m_UseGravity","m_IsKinematic"],
+ "BoxCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Center","m_Size"],
+ "SphereCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Center","m_Radius"],
+ "CapsuleCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Center","m_Radius","m_Height","m_Direction"],
+ "MeshCollider":["m_GameObject","m_Enabled","m_IsTrigger","m_Convex","m_Mesh"],
+ "CharacterController":["m_GameObject","m_Enabled","m_Center","m_Radius","m_Height","m_SlopeLimit","m_StepOffset"],
+ "LODGroup":["m_GameObject","m_Enabled","m_LODs","m_Size","m_LocalReferencePoint"],
+ "Animation":["m_GameObject","m_Enabled","m_Animations","m_Clip"],
  "PrefabInstance":["m_SourcePrefab","m_Modification","m_RemovedComponents","m_AddedComponents","m_TransformParent"],
  "PrefabModification":["m_Target","m_PropertyPath","m_Value","m_ObjectReference"],
  "PropertyModification":["target","propertyPath","value","objectReference"]
