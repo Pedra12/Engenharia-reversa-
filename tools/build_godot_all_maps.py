@@ -221,6 +221,34 @@ def main():
     if not source_assets.is_dir():
         raise SystemExit("Recovered gameplay asset library missing: "+str(source_assets))
     shutil.copytree(source_assets,combat_assets,dirs_exist_ok=True)
+    original_export=pathlib.Path("unity_audit")/"exported"
+    if not original_export.is_dir():
+        raise SystemExit("Full Unity export missing: "+str(original_export))
+    original_assets=PROJECT/"assets"/"unity_original"
+    for folder in ("textures","audio","meshes"):
+        source_folder=original_export/folder
+        if source_folder.is_dir():
+            shutil.copytree(source_folder,original_assets/folder,dirs_exist_ok=True)
+    # Include the original first-person hand/arm meshes and their source material map.
+    for source_name in ("SerializedFile_Mesh_sk_bomb_fp.obj","SerializedFile_Mesh_sk_gloves.obj"):
+        source=original_export/"meshes"/source_name
+        if not source.is_file():
+            raise SystemExit("Original first-person mesh missing: "+source_name)
+    required_original_textures=(
+        "SerializedFile_Texture2D_arm-diffuse.png",
+        "SerializedFile_Sprite_ui_gameplay_left_joystick.png",
+        "SerializedFile_Sprite_ui_gameplay_joystick_knob.png",
+        "SerializedFile_Sprite_center_scope_256.png",
+        "SerializedFile_Sprite_ui_gameplay_button_circle.png",
+        "SerializedFile_Sprite_CF-Button-Fire.png"
+    )
+    missing_ui=[name for name in required_original_textures if not (original_assets/"textures"/name).is_file()]
+    if missing_ui:
+        raise SystemExit("Original combat UI/arm textures missing: "+", ".join(missing_ui))
+    for ref_name in ("UNITY_SCENE_OBJECTS.json","UNITY_ASSET_AUDIT.json","UNITY_MATERIAL_PROPERTIES.json","UNITY_OBJECT_CATALOG.csv"):
+        source=pathlib.Path("unity_audit")/ref_name
+        if source.is_file():
+            shutil.copy2(source,reference_dir/source.name)
     combat_files=list(combat_assets.rglob("*"))
     required=[
         combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
@@ -232,7 +260,7 @@ def main():
     if missing_required:
         raise SystemExit("Required original combat assets missing: "+", ".join(missing_required))
     shutil.copytree(pathlib.Path("combat"),PROJECT/"combat",dirs_exist_ok=True)
-    for ref_name in ("source_scripts","UNITY_ANIMATION_DATA.json","UNITY_ANIMATOR_DATA.json","UNITY_SKINNING_DATA.json","GAMEPLAY_ASSET_LIBRARY.csv"):
+    for ref_name in ("source_scripts","UNITY_ANIMATION_DATA.json","UNITY_ANIMATOR_DATA.json","UNITY_SKINNING_DATA.json","UNITY_SCENE_OBJECTS.json","GAMEPLAY_ASSET_LIBRARY.csv"):
         source=pathlib.Path("unity_audit")/ref_name
         if source.is_dir():
             shutil.copytree(source,reference_dir/"unity_scripts",dirs_exist_ok=True)
