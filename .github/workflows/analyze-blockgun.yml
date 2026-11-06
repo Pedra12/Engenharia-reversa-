@@ -66,6 +66,24 @@ jobs:
       - name: Build relational Unity scene graph
         if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_scene_graph.py
+      - name: Upload original combat extraction for rig and HUD reconstruction
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockGun-Original-Combat-Forensics
+          path: |
+            unity_audit/UNITY_SCENE_OBJECTS.json
+            unity_audit/UNITY_SKINNING_DATA.json
+            unity_audit/UNITY_ANIMATION_DATA.json
+            unity_audit/UNITY_ANIMATOR_DATA.json
+            unity_audit/UNITY_OBJECT_CATALOG.csv
+            unity_audit/UNITY_MATERIAL_PROPERTIES.json
+            unity_audit/exported/meshes/SerializedFile_Mesh_sk_char_sold_male_01.obj
+            unity_audit/exported/meshes/SerializedFile_Mesh_sk_bomb_fp.obj
+            unity_audit/exported/meshes/SerializedFile_Mesh_sk_gloves.obj
+            unity_audit/exported/audio/
+            unity_audit/exported/textures/
+          if-no-files-found: error
+          retention-days: 30
       - name: Install image library for map icon generation
         run: python3 -m pip install --disable-pip-version-check Pillow
       - name: Generate Godot project with all recovered maps
