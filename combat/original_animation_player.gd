@@ -49,6 +49,8 @@ func play(clip_name: String, blend_duration: float = 0.14, speed: float = 1.0, l
 		return
 	if key == _current_name and not _current.is_empty():
 		_speed = speed
+		if loop_override != null:
+			_loop = bool(loop_override)
 		return
 	_blend_from.clear()
 	for i in range(skeleton.get_bone_count()):
