@@ -67,6 +67,23 @@ def val(v):
 def attr(d,k):
  try: return getattr(d,k,None)
  except Exception: return None
+
+def vec2(v, fallback):
+ try:
+  return {"x":float(getattr(v,"x")),"y":float(getattr(v,"y"))}
+ except Exception:
+  if isinstance(v,dict): return {"x":float(v.get("x",fallback["x"])),"y":float(v.get("y",fallback["y"]))}
+  return dict(fallback)
+def material_uv_transforms(data):
+ """Extract Unity Material m_SavedProperties.m_TexEnvs scale/offset per texture slot."""
+ saved=attr(data,"m_SavedProperties"); envs=attr(saved,"m_TexEnvs") or []; out=[]
+ for entry in envs:
+  key=attr(entry,"first"); value=attr(entry,"second")
+  if value is None and isinstance(entry,(list,tuple)) and len(entry)>=2: key,value=entry[0],entry[1]
+  if value is None: continue
+  out.append({"property":str(key or ""), "Mscale":vec2(attr(value,"m_Scale"),{"x":1.0,"y":1.0}), "Moffset":vec2(attr(value,"m_Offset"),{"x":0.0,"y":0.0}), "texture_path_id":int(getattr(attr(value,"m_Texture"),"path_id",0) or 0)})
+ return out
+
 def static_batch_info(d):
  v=attr(d,"m_StaticBatchInfo")
  if v is None: return None
@@ -241,7 +258,7 @@ def main():
        if material:
         info.setdefault("material_resources",[]).append({
          "source":target_source,"path_id":ref["path_id"],"name":material["name"],
-         "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],
+         "textures":[{"source":x.get("target_source"),"path_id":x["path_id"],"exported_png":texture_exports.get((x.get("target_source"),x["path_id"]))} for x in material.get("refs",[]) if x["field"]=="m_TexEnvs"],\n         "unity_uv_transforms":material.get("unity_uv_transforms",[]),
          "shader_refs":[{"source":x.get("target_source"),"path_id":x["path_id"]} for x in material.get("refs",[]) if x["field"]=="m_Shader"]
         })
      return info
