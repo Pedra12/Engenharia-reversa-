@@ -101,7 +101,8 @@ def worker(bundle_path,out,types_filter,path_ids):
             name=str(getattr(data,"m_Name","") or "")
             base=safe(f"{typ}_{name}_{pid}")
             row={"source":pathlib.Path(bundle_path).name,"path_id":pid,"type":typ,"name":name,
-                 "byte_size":int(getattr(obj,"byte_size",0) or 0)}
+                 "byte_size":int(getattr(obj,"byte_size",0) or 0),
+                 "external_files":audit.json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or [])}
             if typ in FIELDS:
                 row["fields"]=audit.selected_fields(data,FIELDS[typ])
             if typ in SCENE_TYPES and typ in ("MonoBehaviour","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable"):
