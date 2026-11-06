@@ -6,7 +6,7 @@ ARCHIVE=pathlib.Path("blockgun.zip")
 OUT=pathlib.Path("unity_audit"); OUT.mkdir(exist_ok=True)
 EXPORT=OUT/"exported"; EXPORT.mkdir(exist_ok=True)
 rows=[]; errors=[]; counts=collections.Counter(); previews=[]
-skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; library_rows=[]
+skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; material_records=[]; library_rows=[]
 DATA_PREFIX="resources/assets/bin/Data/"
 
 def safe(s):
@@ -36,6 +36,18 @@ def selected_fields(data, names):
             try: out[name]=json_safe(getattr(data,name))
             except Exception as e: out[name]={"error":str(e)[:200]}
     return out
+
+def unity_material_uv(data):
+ """Explicit Unity Material texture atlas transforms from m_SavedProperties.m_TexEnvs."""
+ saved=getattr(data,"m_SavedProperties",None); envs=getattr(saved,"m_TexEnvs",[]) or []; result=[]
+ for entry in envs:
+  key=getattr(entry,"first",None); value=getattr(entry,"second",None)
+  if value is None and isinstance(entry,(list,tuple)) and len(entry)>=2: key,value=entry[0],entry[1]
+  if value is None: continue
+  scale=getattr(value,"m_Scale",None); offset=getattr(value,"m_Offset",None); tex=getattr(value,"m_Texture",None)
+  result.append({"property":str(key or ""),"Mscale":{"x":float(getattr(scale,"x",1.0)),"y":float(getattr(scale,"y",1.0))},"Moffset":{"x":float(getattr(offset,"x",0.0)),"y":float(getattr(offset,"y",0.0))},"texture_path_id":int(getattr(tex,"path_id",0) or 0)})
+ return result
+
 def main():
     import UnityPy
     from PIL import Image, ImageDraw
@@ -120,6 +132,21 @@ def main():
                                     thumb=im.convert("RGB"); thumb.thumbnail((180,120))
                                     previews.append((thumb.copy(),str(name or pid)[:42]))
                         except Exception as e: row["export_error"]="image: "+str(e)[:250]
+                    elif typ=="Material":
+                        # Preserve serialized Unity material settings instead of guessing
+                        # colors/textures/shaders later in the Godot conversion.
+                        material_fields=selected_fields(data,[
+                            "m_Name","m_Shader","m_SavedProperties","m_CustomRenderQueue",
+                            "m_EnableInstancing","m_DoubleSidedGI","m_ValidKeywords",
+                            "m_InvalidKeywords","m_LightmapFlags","m_Flags"
+                        ])
+                        row["material_data"]=json.dumps(material_fields,ensure_ascii=False)[:12000]
+                        row["unity_uv_transforms"]=json.dumps(unity_material_uv(data),ensure_ascii=False)
+                        material_records.append({"source":source,"path_id":str(pid),"name":str(name),"serialized":material_fields})
+                        try:
+                            shader=getattr(data,"m_Shader",None)
+                            row["shader_path_id"]=str(getattr(shader,"path_id","") or "")
+                        except Exception: pass
                     elif typ=="Mesh":
                         try:
                             result=data.export()
@@ -180,6 +207,7 @@ def main():
                 continue
             blob=source_zip.read(n); save(dest,blob)
             library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    (OUT/"UNITY_MATERIAL_PROPERTIES.json").write_text(json.dumps(material_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATOR_DATA.json").write_text(json.dumps({"controllers":controller_records,"avatars":avatar_records},ensure_ascii=False,indent=2),encoding="utf-8")

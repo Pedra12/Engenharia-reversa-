@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Generate a Godot 4 project with all recovered Block Gun maps."""
-import json, pathlib, shutil, re
+import json, pathlib, shutil, re, sys
 from PIL import Image, ImageDraw, ImageChops, ImageEnhance, ImageOps
 ROOT=pathlib.Path("scene_graph"); PROJECT=pathlib.Path("godot_project")
 MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
+requested_map=None
+if len(sys.argv)>1:
+    if len(sys.argv)!=3 or sys.argv[1]!="--only-map" or sys.argv[2] not in MAPS:
+        raise SystemExit("Usage: build_godot_all_maps.py [--only-map lvl_india]")
+    requested_map=sys.argv[2]
+MAPS_TO_BUILD=[requested_map] if requested_map else MAPS
 names={"lvl_baghdad":"Baghdad","lvl_assault":"Assalto","lvl_middle_east":"Oriente Médio","lvl_resort":"Resort","lvl_forest":"Floresta","lvl_house":"Casa","lvl_india":"Índia","lvl_rome":"Roma","lvl_deluxe_fest":"Festival Deluxe"}
 def slice_obj(source:pathlib.Path,destination:pathlib.Path,first:int,count:int):
     """Keep only the Unity static-batch submeshes assigned to one renderer."""
@@ -77,7 +83,8 @@ def enhance_india_atlas(source:pathlib.Path,destination:pathlib.Path):
 
 
 def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,lightmap_path:pathlib.Path,
-                                 output_path:pathlib.Path,first_sub_mesh:int=0,sub_mesh_count:int=0):
+                                 output_path:pathlib.Path,first_sub_mesh:int=0,sub_mesh_count:int=0,
+                                 lightmap_st:dict|None=None):
     """Create a GLB with original UV0 and baked Unity lightmap in vertex colors."""
     try:
         import numpy as np
@@ -85,7 +92,7 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         import subprocess, sys
         subprocess.check_call([sys.executable,"-m","pip","install","--disable-pip-version-check","numpy"])
         import numpy as np
-    import struct, io
+    import struct
 
     uv_data=json.loads(uv_path.read_text(encoding="utf-8"))
     uv0=np.asarray(uv_data.get("m_UV0",[]),dtype=np.float32)
@@ -93,7 +100,17 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
     if len(uv0)==0 or len(uv0)!=len(uv1):
         raise ValueError(f"India UV channel mismatch: {uv_path.name}")
     if np.any(uv0 < -0.001) or np.any(uv0 > 1.001) or np.any(uv1 < -0.001) or np.any(uv1 > 1.001):
-        raise ValueError(f"India UV coordinates outside 0..1: {uv_path.name}")
+        raise ValueError(f"India source UV coordinates outside 0..1: {uv_path.name}")
+    # Unity stores the lightmap atlas transform on each MeshRenderer as
+    # m_LightmapTilingOffset = (scale_x, scale_y, offset_x, offset_y).
+    # Apply it before sampling the shared lightmap texture; raw mesh UV1 alone
+    # samples the wrong atlas region for packed renderers.
+    st=lightmap_st or {}
+    scale_x=float(st.get("x",1.0)); scale_y=float(st.get("y",1.0))
+    offset_x=float(st.get("z",0.0)); offset_y=float(st.get("w",0.0))
+    uv1=uv1*np.asarray([scale_x,scale_y],dtype=np.float32)+np.asarray([offset_x,offset_y],dtype=np.float32)
+    if np.any(uv1 < -0.001) or np.any(uv1 > 1.001):
+        raise ValueError(f"India transformed lightmap UV outside 0..1: {uv_path.name}; ST={st}")
 
     positions=[]; normals=[]; texcoords=[]; groups=[]; current=None
     with obj_path.open(encoding="utf-8",errors="replace") as source:
@@ -152,7 +169,13 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
     remap={old:new for new,old in enumerate(used)}
     pos=np.asarray(positions,dtype=np.float32)[used]
     nrm=np.asarray(normals,dtype=np.float32)[used]
-    tex=np.asarray(texcoords,dtype=np.float32)[used]
+    obj_uv=np.asarray(texcoords,dtype=np.float32)
+    uv0_delta=float(np.max(np.abs(obj_uv-uv0))) if obj_uv.size else float("inf")
+    if not np.isfinite(uv0_delta):
+        raise ValueError(f"India OBJ UV0 comparison is not finite: {obj_path.name}")
+    # Unity serialized m_UV0 is authoritative. Keep its values aligned with
+    # the original Unity vertex indices referenced by selected faces.
+    tex=uv0[used].astype(np.float32,copy=True)
     col=colors[used]
     if not np.isfinite(pos).all() or not np.isfinite(nrm).all() or not np.isfinite(tex).all() or not np.isfinite(col).all():
         raise ValueError(f"Non-finite India mesh data: {obj_path.name}")
@@ -186,19 +209,19 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         if len(indices)==0: continue
         index_view=add_view(indices.astype("<u4").tobytes(),34963)
         index_acc=add_accessor(index_view,5125,len(indices),"SCALAR",int(indices.min()),int(indices.max()))
-        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"material":0,"mode":4})
+        primitives.append({"attributes":{"POSITION":pos_acc,"NORMAL":nrm_acc,"TEXCOORD_0":tex_acc,"COLOR_0":col_acc},"indices":index_acc,"mode":4})
         triangle_count+=len(indices)//3
     if not primitives: raise ValueError(f"No India GLB primitives generated: {obj_path.name}")
 
-    white=io.BytesIO()
-    Image.new("RGBA",(1,1),(255,255,255,255)).save(white,format="PNG")
-    white_view=add_view(white.getvalue(),None)
+    # Vertex colors carry the baked Unity lightmap. A dummy white PNG is
+    # unnecessary here and causes null-texture errors in Godot's headless importer.
+    # Keep the GLB material texture-free; the exact Unity atlas is applied later
+    # by the map material loader.
+    # No GLTF material is embedded. The runtime binds the exact Unity
+    # Material and Texture2D references from the India scene manifest.
     gltf={"asset":{"version":"2.0","generator":"BlockGun India offline lightmap baker"},
           "scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
           "meshes":[{"primitives":primitives}],
-          "images":[{"bufferView":white_view,"mimeType":"image/png"}],
-          "textures":[{"source":0}],
-          "materials":[{"name":"India baked lightmap vertex colors","pbrMetallicRoughness":{"baseColorFactor":[1.0,1.0,1.0,1.0],"baseColorTexture":{"index":0},"metallicFactor":0.0,"roughnessFactor":1.0}}],
           "buffers":[{"byteLength":len(binary)}],"bufferViews":views,"accessors":accessors}
     json_chunk=json.dumps(gltf,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     while len(json_chunk)%4: json_chunk+=b" "
@@ -208,6 +231,31 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
         out.write(struct.pack("<4sII",b"glTF",2,total))
         out.write(struct.pack("<I4s",len(json_chunk),b"JSON")); out.write(json_chunk)
         out.write(struct.pack("<I4s",len(binary),b"BIN\x00")); out.write(binary)
+    blob=output_path.read_bytes()
+    if len(blob)<20 or blob[:4]!=b"glTF" or struct.unpack_from("<I",blob,4)[0]!=2 or struct.unpack_from("<I",blob,8)[0]!=len(blob):
+        raise ValueError(f"India GLB header/length invalid: {output_path.name}")
+    json_size=struct.unpack_from("<I",blob,12)[0]
+    if blob[16:20]!=b"JSON" or 20+json_size+8>len(blob):
+        raise ValueError(f"India GLB JSON chunk invalid: {output_path.name}")
+    verified=json.loads(blob[20:20+json_size].decode("utf-8").rstrip(" \\t\\r\\n"))
+    bin_header=20+json_size
+    bin_size=struct.unpack_from("<I",blob,bin_header)[0]
+    if blob[bin_header+4:bin_header+8]!=bytes((66,73,78,0)) or bin_header+8+bin_size!=len(blob):
+        raise ValueError(f"India GLB BIN chunk invalid: {output_path.name}")
+    if verified.get("materials") or any("material" in p for m in verified.get("meshes",[]) for p in m.get("primitives",[])):
+        raise ValueError(f"India GLB contains an importer-side material: {output_path.name}")
+    for view in verified.get("bufferViews",[]):
+        if int(view.get("byteOffset",0))+int(view.get("byteLength",0))>bin_size:
+            raise ValueError(f"India GLB bufferView exceeds BIN chunk: {output_path.name}")
+    for mesh in verified.get("meshes",[]):
+        for primitive in mesh.get("primitives",[]):
+            attrs=primitive.get("attributes",{})
+            if not all(k in attrs for k in ("POSITION","NORMAL","TEXCOORD_0","COLOR_0")):
+                raise ValueError(f"India GLB missing required vertex channel: {output_path.name}")
+            index_accessor=verified["accessors"][primitive["indices"]]
+            if int(index_accessor.get("max",0))>=len(used):
+                raise ValueError(f"India GLB index exceeds vertex count: {output_path.name}")
+    print(f"INDIA_GLB_INTEGRITY_OK file={output_path.name} bytes={len(blob)} uv0_obj_delta={uv0_delta:.8f} materials=0")
     print(f"INDIA_LIGHTMAP_GLB_OK mesh={obj_path.name} vertices={len(used)} triangles={triangle_count} primitives={len(primitives)} lightmap={lightmap_path.name} output={output_path.name}")
     return {"file":output_path.name,"vertices":len(used),"triangles":triangle_count,"primitives":len(primitives)}
 
@@ -223,13 +271,13 @@ def main():
     draw.rectangle((228,235,263,270),fill=(54,190,235,255))
     icon.save(PROJECT/"icon.png")
     all_meshes=set(); all_textures=set(); catalog=[]
-    for mapid in MAPS:
+    for mapid in MAPS_TO_BUILD:
         path=ROOT/"maps"/(mapid+".json")
         if not path.exists(): raise SystemExit("Manifest missing: "+str(path))
         d=json.loads(path.read_text(encoding="utf-8")); copied=set(); tex=set(); missing=[]
         india_lightmap_bakes=[]
         def walk(n):
-            meshpath=""; colpath=""; mats=[]; batch=None; lightmap_index=None
+            meshpath=""; colpath=""; mats=[]; batch=None; lightmap_index=None; lightmap_st=None
             for comp in n.get("components",[]):
                 typ=comp.get("type","")
                 if typ in ("MeshFilter","SkinnedMeshRenderer"):
@@ -238,26 +286,37 @@ def main():
                 elif typ=="MeshCollider":
                     for ref in comp.get("references",[]):
                         if ref.get("field")=="m_Mesh": colpath=ref.get("exported_obj") or colpath
-                elif typ=="MeshRenderer":
+                elif typ in ("MeshRenderer","SkinnedMeshRenderer"):
+                    # Both renderer types own their own ordered m_Materials array.
+                    # Skinned gameplay prefabs were previously losing every material slot.
                     mats=comp.get("material_resources",[])
-                    batch=comp.get("static_batch_info")
-                    lightmap_index=comp.get("m_LightmapIndex")
+                    if typ=="MeshRenderer":
+                        batch=comp.get("static_batch_info")
+                        lightmap_index=comp.get("m_LightmapIndex")
+                        lightmap_st=(comp.get("m_LightmapTilingOffset") or comp.get("m_LightmapST") or comp.get("m_LightmapScaleOffset"))
                 for material in comp.get("material_resources",[]):
+                    # Match Unity TexEnv by Texture2D path ID and retain its atlas transform.
+                    uv_entries=material.get("unity_uv_transforms",[])
                     for texture in material.get("textures",[]):
+                        texture_pid=int(texture.get("path_id",0) or 0)
+                        uv_match=next((u for u in uv_entries if int(u.get("texture_path_id",0) or 0)==texture_pid),None)
+                        if uv_match:
+                            texture["unity_uv_transform"]={"Mscale":uv_match.get("Mscale",{"x":1.0,"y":1.0}),"Moffset":uv_match.get("Moffset",{"x":0.0,"y":0.0}),"property":uv_match.get("property","")}
                         png=texture.get("exported_png")
                         if png:
                             src=ROOT/png
                             original_name=pathlib.Path(png).name
                             india_atlas=(mapid=="lvl_india" and original_name=="sharedassets1.assets__65__t_atlas_environment.png")
-                            output_name=("india_detail_"+original_name) if india_atlas else original_name
+                            # Preserve the exact exported Unity Texture2D bytes.
+                            output_name=original_name
                             dst=textures/output_name
                             if src.exists():
                                 if dst.name not in all_textures:
-                                    if india_atlas: enhance_india_atlas(src,dst)
-                                    else: shutil.copy2(src,dst)
+                                    shutil.copy2(src,dst)
                                     all_textures.add(dst.name)
-                                if india_atlas:
-                                    texture["exported_png"]=output_name
+                                # Record the exact Godot resource path derived from
+                                # this Unity Material's serialized Texture2D reference.
+                                texture["godot_texture_path"]="res://assets/textures/"+output_name
                                 tex.add(dst.name)
                             else: missing.append(png)
             def copy_mesh(obj,kind):
@@ -309,15 +368,16 @@ def main():
                 tid=str(n.get("transform_path_id",n.get("name","node")))
                 glb_name=f"india_lightmapped_{tid}.glb"
                 glb_path=meshes/glb_name
-                result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count)
+                result=build_india_lightmapped_glb(source_obj,uv_path,lightmap_path,glb_path,first,count,lightmap_st)
                 n["godot_render_obj"]=glb_name
                 n["godot_lightmap_vertex_colors"]=True
-                # GLB primitives are sliced from the original Unity static-batch
-                # submesh range. Preserve the original material-array offset so
-                # each surface receives its matching Unity material, not mats[0].
-                n["godot_material_start_index"]=first if count>0 else 0
+                # Static-batch first_sub_mesh selects a range in the combined
+                # source mesh, not an offset in this renderer's m_Materials array.
+                # The sliced GLB starts at local surface zero, so material slots
+                # must also start at zero for this renderer.
+                n["godot_material_start_index"]=0
                 all_meshes.add(glb_name); copied.add(glb_name)
-                india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,**result})
+                india_lightmap_bakes.append({"node":n.get("name"),"lightmap_index":lm_index,"lightmap_st":lightmap_st,**result})
             n["godot_materials"]=mats
             # Mirror the exact per-axis correction applied to CollisionShape3D
             # so geometry-based stair probes use the same world dimensions.
@@ -340,7 +400,72 @@ def main():
         walk(d["root"])
         (data_dir/(mapid+".json")).write_text(json.dumps(d,ensure_ascii=False),encoding="utf-8")
         catalog.append({"id":mapid,"name":names[mapid],"nodes":d.get("node_count",0),"meshes":len(copied),"textures":len(tex),"missing":len(missing),"india_lightmap_bakes":india_lightmap_bakes})
-    (data_dir/"maps.json").write_text(json.dumps(catalog,ensure_ascii=False,indent=2),encoding="utf-8")
+    # Copy the original level0 gameplay crate hierarchy into Godot as a
+    # separately inspectable prefab catalog. Preserve renderer-local material
+    # slots and only copy explicitly referenced Unity textures.
+    gameplay_source_manifest=ROOT/"UNITY_GAMEPLAY_PREFABS.json"
+    gameplay_prefab_data={"prefabs":[]}
+    if gameplay_source_manifest.is_file():
+        source_data=json.loads(gameplay_source_manifest.read_text(encoding="utf-8"))
+        gameplay_bindings=[]
+        def prepare_gameplay_node(node):
+            node["godot_render_obj"]=""
+            node["godot_materials"]=[]
+            node["godot_material_start_index"]=0
+            for comp in node.get("components",[]):
+                if comp.get("type") not in ("MeshRenderer","SkinnedMeshRenderer"):
+                    continue
+                mesh_ref=next((ref for ref in comp.get("references",[]) if ref.get("field")=="m_Mesh"),None)
+                if mesh_ref and mesh_ref.get("exported_obj"):
+                    source_obj=ROOT/mesh_ref["exported_obj"]
+                    if not source_obj.is_file():
+                        raise SystemExit("Gameplay prefab mesh missing: "+str(source_obj))
+                    mesh_name=source_obj.name
+                    target_obj=meshes/mesh_name
+                    if not target_obj.is_file():
+                        shutil.copy2(source_obj,target_obj)
+                    all_meshes.add(mesh_name)
+                    node["godot_render_obj"]=mesh_name
+                materials=comp.get("material_resources",[])
+                for material in materials:
+                    for texture in material.get("textures",[]):
+                        exported_png=texture.get("exported_png","")
+                        if not exported_png:
+                            continue
+                        source_png=ROOT/exported_png
+                        if not source_png.is_file():
+                            raise SystemExit("Gameplay prefab texture missing: "+str(source_png))
+                        texture_name=source_png.name
+                        target_png=textures/texture_name
+                        if not target_png.is_file():
+                            shutil.copy2(source_png,target_png)
+                        all_textures.add(texture_name)
+                        texture["godot_texture_path"]="res://assets/textures/"+texture_name
+                node["godot_materials"]=materials
+                node["godot_material_binding_status"]=comp.get("material_binding_status","NOT_A_RENDERER")
+                node["godot_material_slot_count"]=comp.get("material_slot_count",len(materials))
+                node["godot_renderer_type"]=comp.get("type")
+                gameplay_bindings.append({"node":node.get("name",""),"renderer_type":comp.get("type"),
+                    "mesh":node["godot_render_obj"],"material_slot_count":node["godot_material_slot_count"],
+                    "material_binding_status":node["godot_material_binding_status"],
+                    "materials":[{"slot":m.get("slot_index",i),"name":m.get("name",""),"source":m.get("source",""),"path_id":m.get("path_id","")} for i,m in enumerate(materials)]})
+                break
+            for child in node.get("children",[]):
+                prepare_gameplay_node(child)
+        for prefab in source_data.get("prefabs",[]):
+            prepare_gameplay_node(prefab["root"])
+            gameplay_prefab_data["prefabs"].append(prefab)
+        gameplay_prefab_data["renderer_bindings"]=gameplay_bindings
+        gameplay_prefab_data["tank_vehicle_prefabs_found"]=source_data.get("tank_vehicle_prefabs_found",0)
+        gameplay_prefab_data["notes"]=source_data.get("notes",[])
+    (data_dir/"gameplay_prefabs.json").write_text(json.dumps(gameplay_prefab_data,ensure_ascii=False,indent=2),encoding="utf-8")
+    catalog_path=data_dir/"maps.json"
+    if requested_map and catalog_path.exists():
+        existing=json.loads(catalog_path.read_text(encoding="utf-8"))
+        by_id={entry.get("id"):entry for entry in existing if isinstance(entry,dict)}
+        by_id.update({entry.get("id"):entry for entry in catalog})
+        catalog=[by_id[mid] for mid in MAPS if mid in by_id]
+    catalog_path.write_text(json.dumps(catalog,ensure_ascii=False,indent=2),encoding="utf-8")
     (PROJECT/"project.godot").write_text('''config_version=5
 [application]
 config/name="Block Gun - Mapas Recuperados"
@@ -429,6 +554,9 @@ func _ready():
     if OS.get_cmdline_user_args().has("--audit-all-maps"):
         call_deferred("_audit_all_maps")
         return
+    if OS.get_cmdline_user_args().has("--audit-gameplay-prefabs"):
+        call_deferred("_audit_gameplay_prefabs")
+        return
     # Always create a real 3D scene before showing the front end.
     _load_map("lvl_forest","Floresta")
     _show_home()
@@ -489,6 +617,11 @@ func _make_menu():
     maps.custom_minimum_size.y=48
     maps.pressed.connect(_show_map_select)
     home_box.add_child(maps)
+    var gameplay_assets=Button.new()
+    gameplay_assets.text="CAIXAS DE GAMEPLAY"
+    gameplay_assets.custom_minimum_size.y=48
+    gameplay_assets.pressed.connect(_load_gameplay_prefabs)
+    home_box.add_child(gameplay_assets)
     var version=Label.new()
     version.text="VERSÃO DE DESENVOLVIMENTO  |  BUILD EXPERIMENTAL"
     version.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -630,6 +763,32 @@ func _load_map(id:String,title:String):
     map_actions.visible=true
     map_label.text="CENÁRIO: "+title.to_upper()+" | PRÉVIA 3D"
     print("MAP_LOADED ",id," nodes=",d.get("node_count",0)," meshes=",_count_meshes(world))
+func _load_gameplay_prefabs():
+    _stop_walk_mode()
+    if world:
+        world.queue_free()
+    world=Node3D.new()
+    world.name="GameplayPrefabs"
+    add_child(world)
+    var f=FileAccess.open("res://data/gameplay_prefabs.json",FileAccess.READ)
+    if f==null:
+        push_error("Gameplay prefab manifest missing")
+        return
+    var d=JSON.parse_string(f.get_as_text())
+    if not d is Dictionary or not d.has("prefabs"):
+        push_error("Invalid gameplay prefab manifest")
+        return
+    for prefab in d.get("prefabs",[]):
+        _build_node(prefab.get("root",{}),world,"gameplay")
+    _create_camera()
+    _fit_camera()
+    home_panel.visible=false
+    selection_panel.visible=false
+    tutorial_panel.visible=false
+    map_label.visible=true
+    map_actions.visible=true
+    map_label.text="ASSETS DE GAMEPLAY | CAIXAS"
+    print("GAMEPLAY_PREFABS_LOADED count=",d.get("prefabs",[]).size()," meshes=",_count_meshes(world))
 func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     var n=Node3D.new()
     n.name=String(d.get("name","Recovered")).replace("/","_")
@@ -651,6 +810,8 @@ func _build_node(d:Dictionary,parent:Node3D,map_id:String):
     var mats=d.get("godot_materials",[])
     if renderpath=="":
         renderpath=_ref_by_type(d.get("components",[]),"MeshFilter","m_Mesh")
+    if renderpath=="":
+        renderpath=_ref_by_type(d.get("components",[]),"SkinnedMeshRenderer","m_Mesh")
     if renderpath=="":
         renderpath=colpath
     var render_mesh:Mesh=null
@@ -770,20 +931,58 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
     var object_lower=object_name.to_lower()
     var sm=StandardMaterial3D.new()
     sm.roughness=0.88
+    # Preserve the exact Unity albedo tint serialized in m_SavedProperties.m_Colors.
+    # Prefer URP/HDRP _BaseColor and fall back to legacy _Color.
+    var unity_color:Dictionary={}
+    for color_entry in m.get("unity_color_properties",[]):
+        var property_name=String(color_entry.get("property",""))
+        if property_name=="_BaseColor":
+            unity_color=color_entry.get("value",{})
+            break
+        if property_name=="_Color" and unity_color.is_empty():
+            unity_color=color_entry.get("value",{})
+    if not unity_color.is_empty():
+        sm.albedo_color=Color(float(unity_color.get("r",1.0)),float(unity_color.get("g",1.0)),float(unity_color.get("b",1.0)),float(unity_color.get("a",1.0)))
+    # Textures are assigned only from the explicit Unity Material -> Texture2D
+    # references serialized in each map manifest. Do not infer from GameObject names.
     for t in m.get("textures",[]):
-        var p=String(t.get("exported_png",""))
-        if p!="":
-            var tx=load("res://assets/textures/"+p.get_file()) as Texture2D
+        var source_png=String(t.get("exported_png",""))
+        if source_png!="":
+            # Export step copies the referenced original PNG by its exact filename
+            # into assets/textures; this path is recorded in the generated manifest.
+            var texture_path=String(t.get("godot_texture_path",""))
+            if texture_path=="":
+                if india_detail:
+                    push_error("INDIA_TEXTURE_RESOURCE_MISSING material="+material_name+" source="+source_png+" reason=manifest_path_empty")
+                    return null
+                texture_path="res://assets/textures/"+source_png.get_file()
+            if india_detail and not ResourceLoader.exists(texture_path):
+                push_error("INDIA_TEXTURE_RESOURCE_MISSING material="+material_name+" path="+texture_path)
+                return null
+            var tx=load(texture_path) as Texture2D
             if tx:
                 sm.albedo_texture=tx
+                # Unity atlas transform recovered from Material.m_SavedProperties.
+                var uv:Dictionary=t.get("unity_uv_transform",{})
+                var sc:Dictionary=uv.get("Mscale",{})
+                var of:Dictionary=uv.get("Moffset",{})
+                sm.uv1_scale=Vector3(float(sc.get("x",1.0)),float(sc.get("y",1.0)),1.0)
+                sm.uv1_offset=Vector3(float(of.get("x",0.0)),float(of.get("y",0.0)),0.0)
+                print("UNITY_ATLAS_UV material=",material_name," scale=",sm.uv1_scale," offset=",sm.uv1_offset)
                 break
-    if material_name.contains("alpha") or object_lower.contains("alpha"):
+            elif india_detail:
+                push_error("INDIA_TEXTURE_RESOURCE_MISSING material="+material_name+" path="+texture_path+" reason=load_failed")
+                return null
+    # Shader/material behavior follows the recovered Unity Material name/reference,
+    # never a guessed object-name category.
+    if material_name=="unlit":
+        sm.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+    if material_name=="m_atlas_environment_alpha":
         sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
         sm.alpha_scissor_threshold=0.42
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
-    if material_name.contains("water") or object_lower.contains("water"):
+    if material_name=="m_water" or material_name=="water":
         sm.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
-        sm.albedo_color=Color(0.28,0.58,0.72,0.58)
         sm.roughness=0.16
         sm.cull_mode=BaseMaterial3D.CULL_DISABLED
     # All map materials use preprocessed textures; no procedural India shader at runtime.
@@ -1003,6 +1202,65 @@ func _audit_all_maps():
     else:
         print("BLOCKGUN_ALL_MAPS_AUDIT_OK count=",MAPS.size())
         get_tree().quit(0)
+func _audit_gameplay_prefabs():
+    var f=FileAccess.open("res://data/gameplay_prefabs.json",FileAccess.READ)
+    if f==null:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: manifest missing")
+        get_tree().quit(1)
+        return
+    var data=JSON.parse_string(f.get_as_text())
+    if not data is Dictionary or data.get("prefabs",[]).is_empty():
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: no recovered prefab hierarchy")
+        get_tree().quit(1)
+        return
+    var prefab=data["prefabs"][0]
+    var audit_root=Node3D.new()
+    add_child(audit_root)
+    _build_node(prefab.get("root",{}),audit_root,"gameplay")
+    await get_tree().process_frame
+    var crate2=audit_root.find_child("haz_fps_crate2_base",true,false)
+    if crate2==null:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 node missing")
+        get_tree().quit(1)
+        return
+    var crate2_meshes=crate2.find_children("*","MeshInstance3D",true,false)
+    if crate2_meshes.is_empty():
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 mesh missing")
+        get_tree().quit(1)
+        return
+    var crate2_instance=crate2_meshes[0] as MeshInstance3D
+    if crate2_instance.mesh==null or crate2_instance.mesh.get_surface_count()<1:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 surface missing")
+        get_tree().quit(1)
+        return
+    var crate2_material=crate2_instance.get_active_material(0)
+    if not crate2_material is StandardMaterial3D:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: explicit Unity unlit material was not assigned")
+        get_tree().quit(1)
+        return
+    var standard=crate2_material as StandardMaterial3D
+    if standard.shading_mode!=BaseMaterial3D.SHADING_MODE_UNSHADED:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: unlit shader behavior was not preserved")
+        get_tree().quit(1)
+        return
+    var crate1=audit_root.find_child("haz_fps_crate1_base",true,false)
+    if crate1==null:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate1 node missing")
+        get_tree().quit(1)
+        return
+    var bindings=data.get("renderer_bindings",[])
+    var crate1_binding=bindings.filter(func(x): return x.get("node","")=="haz_fps_crate1_base")
+    var crate2_binding=bindings.filter(func(x): return x.get("node","")=="haz_fps_crate2_base")
+    if crate1_binding.is_empty() or crate1_binding[0].get("material_slot_count",-1)!=0:
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate1 empty Unity material array was not preserved")
+        get_tree().quit(1)
+        return
+    if crate2_binding.is_empty() or crate2_binding[0].get("material_slot_count",0)!=1 or crate2_binding[0].get("materials",[]).is_empty() or crate2_binding[0].get("materials",[])[0].get("name","")!="unlit":
+        push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 Unity material slot mapping is incorrect")
+        get_tree().quit(1)
+        return
+    print("GAMEPLAY_PREFAB_BINDING_AUDIT_OK nodes=",prefab.get("node_count",0)," crate1_slots=0 crate2_slot0=unlit unlit_shader=preserved")
+    get_tree().quit(0)
 func _unhandled_input(event):
     if walk_mode:
         _walk_input(event)
