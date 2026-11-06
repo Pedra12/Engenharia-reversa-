@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate a Godot 4 project with all recovered Block Gun maps."""
-import json, pathlib, shutil, re
+import json, pathlib, shutil, re, sys
 from PIL import Image, ImageDraw, ImageChops, ImageEnhance, ImageOps
 ROOT=pathlib.Path("scene_graph"); PROJECT=pathlib.Path("godot_project")
 MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
