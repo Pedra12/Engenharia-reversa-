@@ -42,7 +42,7 @@ new_loop = """            for surface_index in range(mi.mesh.get_surface_count()
                     keep_embedded=true
                 if keep_embedded:
                     continue
-                var recovered_material=_mat([mats[material_index]],String(d.get("name","")))
+                var recovered_material=_mat([mats[material_index]],String(d.get("name","")),map_id=="lvl_india")
                 if recovered_material:
                     if bool(d.get("godot_lightmap_vertex_colors",false)) and recovered_material is StandardMaterial3D:
                         (recovered_material as StandardMaterial3D).vertex_color_use_as_albedo=true
