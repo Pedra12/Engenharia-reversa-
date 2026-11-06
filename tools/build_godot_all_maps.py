@@ -1255,7 +1255,7 @@ func _audit_gameplay_prefabs():
         push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate1 empty Unity material array was not preserved")
         get_tree().quit(1)
         return
-    if crate2_binding.is_empty() or crate2_binding[0].get("material_slot_count",0)!=1 or crate2_binding[0].get("materials",[])[0].get("name","")!="unlit":
+    if crate2_binding.is_empty() or crate2_binding[0].get("material_slot_count",0)!=1 or crate2_binding[0].get("materials",[]).is_empty() or crate2_binding[0].get("materials",[])[0].get("name","")!="unlit":
         push_error("GAMEPLAY_PREFAB_AUDIT_FAILED: crate2 Unity material slot mapping is incorrect")
         get_tree().quit(1)
         return
