@@ -58,6 +58,18 @@ def json_safe(value, depth=0):
                 "boneIndex":json_safe(getattr(value,"boneIndex",[]),depth+1)}
     if hasattr(value,"__dict__"):
         return {str(k):json_safe(v,depth+1) for k,v in vars(value).items() if k not in ("reader","assets_file")}
+    slots=getattr(value.__class__,"__slots__",())
+    if slots:
+        if isinstance(slots,str): slots=(slots,)
+        out={}
+        for key in slots:
+            if key in ("reader","assets_file"): continue
+            try: out[str(key)]=json_safe(getattr(value,key),depth+1)
+            except Exception: pass
+        if out: return out
+    fields=getattr(value,"_fields",())
+    if fields:
+        return {str(k):json_safe(getattr(value,k),depth+1) for k in fields if k not in ("reader","assets_file")}
     return str(value)
 def selected_fields(data, names):
     out={}
