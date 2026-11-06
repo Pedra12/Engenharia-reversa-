@@ -77,6 +77,31 @@ jobs:
       - name: Build relational Unity scene graph
         if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_scene_graph.py
+      - name: Verify recovered gameplay crate hierarchy and material slots
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          p=json.loads(pathlib.Path("scene_graph/UNITY_GAMEPLAY_PREFABS.json").read_text())
+          prefabs=p.get("prefabs",[])
+          if len(prefabs)!=1 or prefabs[0].get("name")!="Haz_fps_crates":
+              raise SystemExit("Expected the original Haz_fps_crates hierarchy")
+          nodes={}
+          def walk(n):
+              nodes[n.get("name","")]=n
+              for child in n.get("children",[]): walk(child)
+          walk(prefabs[0]["root"])
+          for name in ("haz_fps_crate1_base","haz_fps_crate2_base"):
+              if name not in nodes: raise SystemExit("Missing gameplay crate node: "+name)
+          def renderer(node):
+              return next((c for c in node.get("components",[]) if c.get("type")=="SkinnedMeshRenderer"),None)
+          c1=renderer(nodes["haz_fps_crate1_base"])
+          c2=renderer(nodes["haz_fps_crate2_base"])
+          if not c1 or c1.get("material_binding_status")!="EMPTY_IN_UNITY_SERIALIZATION":
+              raise SystemExit("Crate1 original empty material array was not preserved")
+          if not c2 or c2.get("material_slot_count")!=1 or not c2.get("material_resources") or c2["material_resources"][0].get("name")!="unlit":
+              raise SystemExit("Crate2 exact Unity material slot 0 was not recovered")
+          print("UNITY_GAMEPLAY_PREFAB_SOURCE_OK nodes="+str(prefabs[0].get("node_count",0))+" crate1_slots=0 crate2_slot0=unlit")
+          PY
       - name: Install image library for map icon generation
         run: python3 -m pip install --disable-pip-version-check Pillow
       - name: Generate Godot project with all recovered maps
@@ -128,7 +153,10 @@ jobs:
             inventory_out/*QUALITY_AUDIT*
             inventory_out/BLOCKGUN_MAP_QUALITY_AUDIT.*
             godot_project/data/*.json
+            scene_graph/UNITY_GAMEPLAY_PREFABS.json
+            scene_graph/gameplay_prefabs/*.json
             /tmp/map-audit.log
+            /tmp/gameplay-prefab-audit.log
           if-no-files-found: warn
           retention-days: 30
       - name: Validate generated project with Godot 4.5.2
@@ -177,6 +205,19 @@ jobs:
             exit 1
           fi
           echo "All nine maps and their collision resources passed automated audit."
+          set +e
+          /tmp/godot/Godot_v4.5.2-stable_linux.x86_64 --headless --path godot_project -- --audit-gameplay-prefabs 2>&1 | tee /tmp/gameplay-prefab-audit.log
+          PREFAB_AUDIT_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$PREFAB_AUDIT_STATUS" -ne 0 ]; then
+            echo "Recovered gameplay prefab material assignment audit failed."
+            exit "$PREFAB_AUDIT_STATUS"
+          fi
+          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script|Failed loading resource|UNITY_MATERIAL_SLOT_MISSING" /tmp/gameplay-prefab-audit.log; then
+            echo "Gameplay prefab audit found a resource or material-slot error."
+            exit 1
+          fi
+          grep -q "GAMEPLAY_PREFAB_BINDING_AUDIT_OK" /tmp/gameplay-prefab-audit.log
       - name: Install Java and Android SDK
         uses: actions/setup-java@v4
         with:
