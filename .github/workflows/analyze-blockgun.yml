@@ -85,6 +85,7 @@ jobs:
             unity_audit/UNITY_SCENE_OBJECTS.json
             unity_audit/UNITY_SKINNING_DATA.json
             unity_audit/UNITY_RIG_HIERARCHY.json
+            unity_audit/UNITY_HUD_LAYOUT.json
             unity_audit/UNITY_ANIMATION_DATA.json
             unity_audit/UNITY_ANIMATOR_DATA.json
             unity_audit/UNITY_OBJECT_CATALOG.csv
