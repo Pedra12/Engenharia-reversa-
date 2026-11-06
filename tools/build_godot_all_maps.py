@@ -645,11 +645,16 @@ func _run_combat_audit():
     await get_tree().create_timer(2.5).timeout
     var bot_count=world.find_children("BotSoldier_*","CharacterBody3D",true,false).size() if is_instance_valid(world) else 0
     var combat_player=combat_session.get("player") if is_instance_valid(combat_session) else null
-    if is_instance_valid(combat_player) and bot_count>0:
-        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count)
+    var combat_weapon=combat_session.get("weapon_mesh") if is_instance_valid(combat_session) else null
+    var soldier_mesh_ok=combat_session.get("soldier_mesh") is Mesh if is_instance_valid(combat_session) else false
+    var weapon_mesh_ok=is_instance_valid(combat_weapon) and combat_weapon.mesh is Mesh
+    var soldier_texture_ok=combat_session.get("soldier_material").albedo_texture is Texture2D if is_instance_valid(combat_session) else false
+    var weapon_texture_ok=combat_session.get("weapon_material").albedo_texture is Texture2D if is_instance_valid(combat_session) else false
+    if is_instance_valid(combat_player) and bot_count>0 and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
+        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(0)
     else:
-        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count)
+        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(1)
 func _show_home():
     _stop_walk_mode()
