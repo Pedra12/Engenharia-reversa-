@@ -159,6 +159,7 @@ def main():
             with open(OUT/"ARCHIVE_BUNDLE_CANDIDATES.csv","w",newline="",encoding="utf-8") as fh:
                 w=csv.DictWriter(fh,fieldnames=["archive_path","extracted_path","size","magic"]);w.writeheader();w.writerows(bundle_manifest)
             print("REASSEMBLED",len(assembled),"BUNDLE_CANDIDATES",len(bundle_manifest),"BUNDLE_BYTES",sum(x["size"] for x in bundle_manifest))
+            for entry in bundle_manifest: print("BUNDLE_CANDIDATE",entry)
             env=UnityPy.load(str(root))
             objects=list(env.objects)
             print("UNITY_OBJECTS",len(objects))
