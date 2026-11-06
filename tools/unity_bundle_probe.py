@@ -43,6 +43,7 @@ FIELDS={
  "CanvasScaler":["m_GameObject","m_Enabled","m_UiScaleMode","m_ReferencePixelsPerUnit","m_ScaleFactor","m_ReferenceResolution","m_ScreenMatchMode","m_MatchWidthOrHeight"],
  "GraphicRaycaster":["m_GameObject","m_Enabled","m_IgnoreReversedGraphics","m_BlockingObjects","m_BlockingMask"],
  "Material":["m_Name","m_Shader","m_SavedProperties","m_CustomRenderQueue"],
+ "Mesh":["m_Name","m_VertexData","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_BonesAABB","m_SubMeshes","m_IndexBuffer","m_Channels","m_StreamData","m_CompressedMesh"],
  "MonoScript":["m_Name","m_ClassName","m_Namespace","m_AssemblyName"],
  "Sprite":["m_Name","m_Rect","m_Pivot","m_Border","m_RD","m_Texture"],
  "ParticleSystem":["m_GameObject","m_Enabled","lengthInSec","looping","prewarm","playOnAwake","simulationSpace","startDelay","startLifetime","startSpeed","startSize","startColor","gravityModifier","maxParticles","emission","shape","sizeOverLifetime","colorOverLifetime"],
@@ -58,7 +59,7 @@ FIELDS={
  "CharacterController":["m_GameObject","m_Enabled","m_Center","m_Radius","m_Height","m_SlopeLimit","m_StepOffset"],
  "LODGroup":["m_GameObject","m_Enabled","m_LODs","m_Size","m_LocalReferencePoint"],
  "Animation":["m_GameObject","m_Enabled","m_Animations","m_Clip"],
- "AnimationClip":["m_Name","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings","m_SampleRate"],
+ "AnimationClip":["m_Name","m_Legacy","m_Compressed","m_UseHighQualityCurve","m_RotationCurves","m_PositionCurves","m_ScaleCurves","m_FloatCurves","m_PPtrCurves","m_Events","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings","m_SampleRate"],
  "AnimatorController":["m_Name","m_AnimatorLayers","m_AnimatorParameters","m_Controller","m_AnimationClips","m_ClipArray"],
  "Avatar":["m_Name","m_Avatar","m_TOS"]
 }
