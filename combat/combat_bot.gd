@@ -60,7 +60,7 @@ func take_damage(amount: int) -> bool:
 	health = maxi(0, health - amount)
 	if health == 0:
 		if is_instance_valid(combat):
-			combat.bot_killed(self)
+			combat.call("bot_killed", self)
 		queue_free()
 		return true
 	return false
