@@ -255,6 +255,22 @@ def main():
                     rows.append(row)
                 except Exception as e:
                     errors.append("object "+str(getattr(obj,"path_id",idx))+": "+str(e)[:250])
+                    # Keep failed component records too. Unity UI Image/Button and some
+                    # custom MonoBehaviours can have a valid typetree even when obj.read()
+                    # fails; their PPtrs are essential to reconstruct the original HUD.
+                    try:
+                        fallback_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable")
+                        if typ in fallback_types:
+                            fallback={"source":source_label(obj),"path_id":str(getattr(obj,"path_id",idx)),"type":typ,"name":"",
+                                "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
+                                "fields":{},"read_error":str(e)[:250]}
+                            try:
+                                fallback["serialized_fields"]=json_safe(obj.read_typetree())
+                            except Exception as tree_error:
+                                fallback["typetree_error"]=str(tree_error)[:250]
+                            scene_records.append(fallback)
+                    except Exception:
+                        pass
     # Preserve a curated, traceable library of gameplay assets and source stubs.
     source_assets=OUT/"source_assets"
     source_scripts=OUT/"source_scripts"
