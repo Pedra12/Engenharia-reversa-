@@ -240,7 +240,7 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
     verified=json.loads(blob[20:20+json_size].decode("utf-8").rstrip(" \\t\\r\\n"))
     bin_header=20+json_size
     bin_size=struct.unpack_from("<I",blob,bin_header)[0]
-    if blob[bin_header+4:bin_header+8]!=b"BIN\\x00" or bin_header+8+bin_size!=len(blob):
+    if blob[bin_header+4:bin_header+8]!=bytes((66,73,78,0)) or bin_header+8+bin_size!=len(blob):
         raise ValueError(f"India GLB BIN chunk invalid: {output_path.name}")
     if verified.get("materials") or any("material" in p for m in verified.get("meshes",[]) for p in m.get("primitives",[])):
         raise ValueError(f"India GLB contains an importer-side material: {output_path.name}")
