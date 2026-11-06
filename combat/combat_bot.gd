@@ -12,7 +12,7 @@ func configure(player_target: Node3D, combat_owner: Node, soldier_mesh: Mesh, so
 	target = player_target
 	combat = combat_owner
 	collision_layer = 1
-	collision_mask = 1
+	collision_mask = 3
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.34
 	capsule.height = 1.8
