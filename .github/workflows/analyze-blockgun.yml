@@ -1,8 +1,8 @@
-name: Recursive Block Gun inventory
+name: Block Gun - Floresta combat build and asset audit
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/floresta-combate-mobile]
     paths:
       - ".github/workflows/analyze-blockgun.yml"
       - "tools/deep_inventory.py"
@@ -11,6 +11,7 @@ on:
       - "tools/build_godot_preview.py"
       - "tools/build_godot_all_maps.py"
       - "tools/map_quality_audit.py"
+      - "combat/**"
   workflow_dispatch:
 
 permissions:
@@ -24,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
       - name: Prepare archive tools
         run: |
           sudo apt-get update
@@ -111,6 +112,24 @@ jobs:
           grep -q "BLOCKGUN_BOOT_OK" /tmp/godot-runtime.log
           grep -q "MAP_LOADED lvl_forest" /tmp/godot-runtime.log
           echo "Startup and default map load verified."
+      - name: Validate combat scene, recovered character, weapon and bots
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project -- --audit-combat 2>&1 | tee /tmp/combat-audit.log
+          COMBAT_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$COMBAT_STATUS" -ne 0 ]; then
+            echo "Floresta combat runtime audit failed."
+            exit "$COMBAT_STATUS"
+          fi
+          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script|Failed loading resource" /tmp/combat-audit.log; then
+            echo "Combat runtime reported a script or asset error."
+            exit 1
+          fi
+          grep -q "BLOCKGUN_COMBAT_AUDIT_OK" /tmp/combat-audit.log
+          echo "Combat player and bots loaded from recovered assets."
           set +e
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project -- --audit-all-maps 2>&1 | tee /tmp/map-audit.log
           MAP_AUDIT_STATUS=${PIPESTATUS[0]}
@@ -169,7 +188,7 @@ jobs:
           android/android_sdk_path = "$ANDROID_HOME"
           android/java_sdk_path = "$JAVA_HOME"
           EOF
-      - name: Export Android preview APK
+      - name: Export Android Floresta combat APK
         shell: bash
         run: |
           set -euo pipefail
@@ -178,7 +197,7 @@ jobs:
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
           export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
           export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk" 2>&1 | tee /tmp/android-export.log
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunFlorestaCombat.apk" 2>&1 | tee /tmp/android-export.log
           if grep -Eq "No project icon specified|Failed loading resource|SCRIPT ERROR:|Parse Error:" /tmp/android-export.log; then
             echo "Android export reported a fatal resource or icon warning."
             exit 1
@@ -188,7 +207,7 @@ jobs:
       - name: Upload Android preview APK
         uses: actions/upload-artifact@v4
         with:
-          name: BlockGun-Android-Preview-APK
+          name: BlockGun-Floresta-Combat-APK
           path: godot_project/build/BlockGunMapsPreview.apk
           if-no-files-found: error
           retention-days: 30
@@ -202,13 +221,13 @@ jobs:
             const content = Buffer.from(fs.readFileSync(path)).toString('base64');
             let sha;
             try {
-              const existing = await github.rest.repos.getContent({owner: context.repo.owner, repo: context.repo.repo, path: 'BLOCKGUN_DEEP_INVENTORY.md', ref: 'main'});
+              const existing = await github.rest.repos.getContent({owner: context.repo.owner, repo: context.repo.repo, path: 'BLOCKGUN_DEEP_INVENTORY.md', ref: context.refName});
               sha = existing.data.sha;
             } catch (e) {}
             await github.rest.repos.createOrUpdateFileContents({
               owner: context.repo.owner, repo: context.repo.repo, path: 'BLOCKGUN_DEEP_INVENTORY.md',
               message: 'Publish recursive inventory of Block Gun archive',
-              content, ...(sha ? {sha} : {}), branch: 'main'
+              content, ...(sha ? {sha} : {}), branch: context.refName
             });
       - name: Upload full inventories
         uses: actions/upload-artifact@v4
