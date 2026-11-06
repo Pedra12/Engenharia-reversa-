@@ -791,6 +791,18 @@ func _mat(ms:Array,object_name:String="",india_detail:bool=false)->Material:
     var object_lower=object_name.to_lower()
     var sm=StandardMaterial3D.new()
     sm.roughness=0.88
+    # Preserve the exact Unity albedo tint serialized in m_SavedProperties.m_Colors.
+    # Prefer URP/HDRP _BaseColor and fall back to legacy _Color.
+    var unity_color:Dictionary={}
+    for color_entry in m.get("unity_color_properties",[]):
+        var property_name=String(color_entry.get("property",""))
+        if property_name=="_BaseColor":
+            unity_color=color_entry.get("value",{})
+            break
+        if property_name=="_Color" and unity_color.is_empty():
+            unity_color=color_entry.get("value",{})
+    if not unity_color.is_empty():
+        sm.albedo_color=Color(float(unity_color.get("r",1.0)),float(unity_color.get("g",1.0)),float(unity_color.get("b",1.0)),float(unity_color.get("a",1.0)))
     # Textures are assigned only from the explicit Unity Material -> Texture2D
     # references serialized in each map manifest. Do not infer from GameObject names.
     for t in m.get("textures",[]):
