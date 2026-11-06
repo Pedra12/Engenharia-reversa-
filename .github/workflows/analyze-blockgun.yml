@@ -202,13 +202,13 @@ jobs:
             echo "Android export reported a fatal resource or icon warning."
             exit 1
           fi
-          test -s godot_project/build/BlockGunMapsPreview.apk
-          ls -lh godot_project/build/BlockGunMapsPreview.apk
+          test -s godot_project/build/BlockGunFlorestaCombat.apk
+          ls -lh godot_project/build/BlockGunFlorestaCombat.apk
       - name: Upload Android preview APK
         uses: actions/upload-artifact@v4
         with:
           name: BlockGun-Floresta-Combat-APK
-          path: godot_project/build/BlockGunMapsPreview.apk
+          path: godot_project/build/BlockGunFlorestaCombat.apk
           if-no-files-found: error
           retention-days: 30
       - name: Publish summary
