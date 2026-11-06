@@ -16,6 +16,7 @@ on:
       - "tools/build_godot_preview.py"
       - "tools/build_godot_all_maps.py"
       - "tools/convert_unity_rigs.py"
+      - "tools/convert_unity_animations.py"
       - "tools/map_quality_audit.py"
       - "combat/**"
   workflow_dispatch:
