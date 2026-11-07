@@ -51,6 +51,9 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 		return
 	visual_root = rig["root"]
 	skeleton = rig["skeleton"]
+	var body_mesh: MeshInstance3D = rig.get("mesh_instance")
+	if body_mesh and body_mesh.mesh:
+		print("BOT_MODEL_AABB name=", body_mesh.name, " aabb=", body_mesh.mesh.get_aabb(), " mesh_transform=", body_mesh.transform, " rig_transform=", visual_root.transform, " skeleton_transform=", skeleton.transform)
 	anim_player = ANIMATION_PLAYER_SCRIPT.new()
 	add_child(anim_player)
 	anim_player.setup(skeleton)
