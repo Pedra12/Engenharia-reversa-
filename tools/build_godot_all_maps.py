@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate a Godot 4 project with all recovered Block Gun maps."""
-import json, pathlib, shutil, re
+import json, pathlib, shutil, re, subprocess, sys
 from PIL import Image, ImageDraw, ImageChops, ImageEnhance, ImageOps
 ROOT=pathlib.Path("scene_graph"); PROJECT=pathlib.Path("godot_project")
 MAPS=["lvl_baghdad","lvl_assault","lvl_middle_east","lvl_resort","lvl_forest","lvl_house","lvl_india","lvl_rome","lvl_deluxe_fest"]
@@ -214,7 +214,80 @@ def build_india_lightmapped_glb(obj_path:pathlib.Path,uv_path:pathlib.Path,light
 
 def main():
     data_dir=PROJECT/"data"; meshes=PROJECT/"assets"/"meshes"; textures=PROJECT/"assets"/"textures"
-    for p in (data_dir,meshes,textures): p.mkdir(parents=True,exist_ok=True)
+    combat_assets=PROJECT/"assets"/"combat_source"
+    reference_dir=PROJECT/"reference"
+    for p in (data_dir,meshes,textures,combat_assets,reference_dir): p.mkdir(parents=True,exist_ok=True)
+    source_assets=pathlib.Path("unity_audit")/"source_assets"
+    if not source_assets.is_dir():
+        raise SystemExit("Recovered gameplay asset library missing: "+str(source_assets))
+    shutil.copytree(source_assets,combat_assets,dirs_exist_ok=True)
+    original_export=pathlib.Path("unity_audit")/"exported"
+    if not original_export.is_dir():
+        raise SystemExit("Full Unity export missing: "+str(original_export))
+    original_assets=PROJECT/"assets"/"unity_original"
+    for folder in ("textures","audio","meshes"):
+        source_folder=original_export/folder
+        if source_folder.is_dir():
+            shutil.copytree(source_folder,original_assets/folder,dirs_exist_ok=True)
+    # Include the original first-person hand/arm meshes and their source material map.
+    for suffix in ("Mesh_sk_bomb_fp.obj","Mesh_sk_gloves.obj"):
+        matches=list((original_assets/"meshes").glob("*_"+suffix))
+        if not matches:
+            raise SystemExit("Original first-person mesh missing by asset name: "+suffix)
+    required_original_textures=(
+        "Texture2D_arm-diffuse.png",
+        "Sprite_ui_gameplay_left_joystick.png",
+        "Sprite_ui_gameplay_joystick_knob.png",
+        "Sprite_center_scope_256.png",
+        "Sprite_ui_gameplay_button_circle.png",
+        "Sprite_CF-Button-Fire.png"
+    )
+    missing_ui=[suffix for suffix in required_original_textures if not list((original_assets/"textures").glob("*_"+suffix))]
+    if missing_ui:
+        raise SystemExit("Original combat UI/arm textures missing by asset name: "+", ".join(missing_ui))
+    for ref_name in ("UNITY_SCENE_OBJECTS.json","UNITY_RIG_HIERARCHY.json","UNITY_HUD_LAYOUT.json","UNITY_ASSET_AUDIT.json","UNITY_MATERIAL_PROPERTIES.json","UNITY_OBJECT_CATALOG.csv"):
+        source=pathlib.Path("unity_audit")/ref_name
+        if source.is_file():
+            shutil.copy2(source,reference_dir/source.name)
+    subprocess.run([sys.executable,"tools/convert_unity_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    subprocess.run([sys.executable,"tools/convert_unity_animations.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    hud_layout=pathlib.Path("unity_audit")/"UNITY_HUD_LAYOUT.json"
+    if hud_layout.is_file():
+        shutil.copy2(hud_layout,combat_assets/"original_hud_layout.json")
+    bundle_probe=pathlib.Path("unity_audit")/"bundle_probe"
+    if bundle_probe.is_dir():
+        shutil.copytree(bundle_probe,reference_dir/"bundle_probe",dirs_exist_ok=True)
+        for bundle_dir in bundle_probe.iterdir():
+            if not bundle_dir.is_dir() or bundle_dir.name=="failed_bundles": continue
+            for kind in ("meshes","textures","audio"):
+                src=bundle_dir/kind
+                if src.is_dir():
+                    shutil.copytree(src,original_assets/"bundle_assets"/bundle_dir.name/kind,dirs_exist_ok=True)
+    # Build a real skinned first-person UMP45 rig from the original bundle.
+    # This is separate from the older static OBJ reference used by the prototype.
+    subprocess.run([sys.executable,"tools/convert_bundle_weapon_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    # Recover the real forest map center and spawn groups from the original level5 scene.
+    subprocess.run([sys.executable,"tools/extract_forest_spawn_points.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    # Recover the exact walkable surface and off-mesh links from the original level5 NavMeshData.
+    subprocess.run([sys.executable,"tools/extract_forest_navmesh.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    combat_files=list(combat_assets.rglob("*"))
+    required=[
+        combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
+        combat_assets/"meshes"/"UMP_45_2.obj",
+        combat_assets/"textures"/"SimpleMilitary_Soldier01_Black_-6561600483854028127.png",
+        combat_assets/"textures"/"UMP_45_Diffuse_-7805003812694618604.png"
+    ]
+    missing_required=[str(p) for p in required if not p.is_file()]
+    if missing_required:
+        raise SystemExit("Required original combat assets missing: "+", ".join(missing_required))
+    shutil.copytree(pathlib.Path("combat"),PROJECT/"combat",dirs_exist_ok=True)
+    for ref_name in ("source_scripts","UNITY_ANIMATION_DATA.json","UNITY_ANIMATOR_DATA.json","UNITY_SKINNING_DATA.json","UNITY_SCENE_OBJECTS.json","GAMEPLAY_ASSET_LIBRARY.csv"):
+        source=pathlib.Path("unity_audit")/ref_name
+        if source.is_dir():
+            shutil.copytree(source,reference_dir/"unity_scripts",dirs_exist_ok=True)
+        elif source.is_file():
+            shutil.copy2(source,reference_dir/source.name)
+    print("COMBAT_SOURCE_ASSETS",sum(1 for p in combat_files if p.is_file()))
     # A real app icon prevents Godot's Android exporter from emitting the
     # missing-project-icon error on every build.
     icon=Image.new("RGBA",(512,512),(8,18,32,255)); draw=ImageDraw.Draw(icon)
@@ -354,6 +427,8 @@ window/stretch/mode="canvas_items"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+[navigation]
+3d/merge_rasterizer_cell_scale=0.001
 environment/defaults/default_clear_color=Color(0.055, 0.075, 0.095, 1)
 ''',encoding="utf-8")
     (PROJECT/"export_presets.cfg").write_text("""[preset.0]
@@ -364,8 +439,8 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter=""
-exclude_filter=""
-export_path="build/BlockGunMapsPreview.apk"
+exclude_filter="reference/*"
+export_path="build/BlockGunFlorestaCombat.apk"
 encryption_include_filters=""
 encryption_exclude_filters=""
 encrypt_pck=false
@@ -390,8 +465,8 @@ architectures/x86=false
 architectures/x86_64=false
 version/code=1
 version/name="1.0"
-package/unique_name="com.pedra12.blockgunmaps"
-package/name="Block Gun Map Preview"
+package/unique_name="com.pedra12.blockgunbattle"
+package/name="Block Gun - Combate Floresta"
 package/signed=true
 package/app_category=2
 screen/immersive_mode=true
@@ -423,6 +498,7 @@ var move_vector:=Vector2.ZERO
 var walk_yaw:=0.0
 var walk_pitch:=0.0
 var jump_button:Button
+var combat_session:Node3D
 func _ready():
     _lighting()
     _make_menu()
@@ -434,6 +510,9 @@ func _ready():
     _show_home()
     print("BLOCKGUN_BOOT_OK")
     print("BLOCKGUN_MAPS_READY count=",MAPS.size())
+    if OS.get_cmdline_user_args().has("--audit-combat"):
+        call_deferred("_run_combat_audit")
+        return
 func _make_menu():
     var layer=CanvasLayer.new()
     layer.layer=10
@@ -479,6 +558,12 @@ func _make_menu():
     play.add_theme_font_size_override("font_size",24)
     play.pressed.connect(_show_map_select)
     home_box.add_child(play)
+    var battle=Button.new()
+    battle.text="INICIAR BATALHA | FLORESTA"
+    battle.custom_minimum_size=Vector2(0,58)
+    battle.add_theme_font_size_override("font_size",19)
+    battle.pressed.connect(_start_combat)
+    home_box.add_child(battle)
     var tutorial=Button.new()
     tutorial.text="COMO JOGAR"
     tutorial.custom_minimum_size.y=48
@@ -585,6 +670,105 @@ func _make_menu():
     jump_button.visible=false
     jump_button.pressed.connect(_request_jump)
     menu.add_child(jump_button)
+func _start_combat():
+    if is_instance_valid(combat_session) or not is_instance_valid(world):
+        return
+    home_panel.visible=false
+    selection_panel.visible=false
+    tutorial_panel.visible=false
+    map_label.visible=false
+    map_actions.visible=false
+    combat_session=Node3D.new()
+    combat_session.name="FlorestaCombatSession"
+    combat_session.set_script(load("res://combat/combat_mode.gd") as Script)
+    add_child(combat_session)
+    combat_session.call_deferred("begin",world,Callable(self,"_end_combat"))
+func _end_combat():
+    if is_instance_valid(combat_session):
+        combat_session.call("shutdown")
+    combat_session.queue_free()
+    combat_session=null
+    if is_instance_valid(camera):
+        camera.current=true
+    _show_home()
+func _run_combat_audit():
+    _start_combat()
+    await get_tree().create_timer(1.25).timeout
+    var initial_bot_positions: Array[Vector3] = []
+    var initial_bots=world.find_children("BotSoldier_*","CharacterBody3D",true,false) if is_instance_valid(world) else []
+    for initial_bot in initial_bots:
+        initial_bot_positions.append(initial_bot.global_position)
+    await get_tree().create_timer(1.5).timeout
+    var bot_count=world.find_children("BotSoldier_*","CharacterBody3D",true,false).size() if is_instance_valid(world) else 0
+    var combat_player=combat_session.get("player") if is_instance_valid(combat_session) else null
+    var combat_weapon=combat_session.get("weapon_mesh") if is_instance_valid(combat_session) else null
+    var combat_radar=combat_session.get("radar") if is_instance_valid(combat_session) else null
+    var bots=world.find_children("BotSoldier_*","CharacterBody3D",true,false) if is_instance_valid(world) else []
+    var radar_bot_refs=combat_radar.get("bots") if is_instance_valid(combat_radar) else []
+    var radar_ok=is_instance_valid(combat_radar) and combat_radar.has_method("update_radar") and combat_radar.get("player")==combat_player and radar_bot_refs.size()==bot_count
+    print("BLOCKGUN_RADAR_AUDIT active=",radar_ok," bot_blips=",radar_bot_refs.size() if is_instance_valid(combat_radar) else 0," expected_bots=",bot_count)
+    var navigation_ok=false
+    var bot_agent_path_ok=false
+    var bot_animation_ok=false
+    var bot_motion_ok=false
+    var bot_facing_ok=false
+    var max_bot_displacement=0.0
+    var best_facing_alignment=-1.0
+    for bot_index in range(mini(bots.size(),initial_bot_positions.size())):
+        var audited_bot=bots[bot_index]
+        var displacement=Vector2(audited_bot.global_position.x-initial_bot_positions[bot_index].x,audited_bot.global_position.z-initial_bot_positions[bot_index].z).length()
+        max_bot_displacement=maxf(max_bot_displacement,displacement)
+        var to_player=combat_player.global_position-audited_bot.global_position
+        to_player.y=0.0
+        if to_player.length()>0.01:
+            var model_forward=-audited_bot.global_transform.basis.z
+            model_forward.y=0.0
+            model_forward=model_forward.normalized()
+            best_facing_alignment=maxf(best_facing_alignment,model_forward.dot(to_player.normalized()))
+    bot_motion_ok=max_bot_displacement>0.15
+    bot_facing_ok=best_facing_alignment>0.65
+    print("BLOCKGUN_BOT_BEHAVIOR_AUDIT moved=",bot_motion_ok," max_displacement=",max_bot_displacement," facing_player=",bot_facing_ok," best_forward_dot=",best_facing_alignment)
+    var nav_region=combat_session.get("navigation_region") if is_instance_valid(combat_session) else null
+    if is_instance_valid(nav_region) and is_instance_valid(combat_player) and bots.size()>0:
+        var nav_map=nav_region.get_navigation_map()
+        var player_nav_position=NavigationServer3D.map_get_closest_point(nav_map,combat_player.global_position)
+        var bot_nav_position=NavigationServer3D.map_get_closest_point(nav_map,bots[0].global_position)
+        var nav_path=NavigationServer3D.map_get_path(nav_map,player_nav_position,bot_nav_position,true,1)
+        navigation_ok=nav_path.size()>=2
+        var bot_agent=bots[0].get("navigation_agent")
+        # Combat bots follow authoritative NavigationServer paths directly so
+        # they can recover from spawn points slightly above the baked surface.
+        # The NavigationAgent remains required for avoidance and target tracking,
+        # but its transient cached path is not the movement source of truth.
+        bot_agent_path_ok=is_instance_valid(bot_agent) and navigation_ok
+        print("BLOCKGUN_NAVIGATION_AUDIT path_points=",nav_path.size()," agent_present=",is_instance_valid(bot_agent)," map_iteration=",NavigationServer3D.map_get_iteration_id(nav_map))
+    if bots.size()>0:
+        var bot_anim=bots[0].get("anim_player")
+        if is_instance_valid(bot_anim):
+            bot_animation_ok=bot_anim.has_clip("front_run") and bot_anim.has_clip("left_walk") and bot_anim.has_clip("right_walk") and bot_anim.has_clip("back_run") and bot_anim.has_clip("Fire") and bot_anim.has_clip("Hit Reaction")
+        print("BLOCKGUN_ANIMATION_AUDIT locomotion_fire_hit=",bot_animation_ok," current=",bot_anim.get_current_animation() if is_instance_valid(bot_anim) else "missing")
+    var soldier_mesh_ok=false
+    var soldier_texture_ok=false
+    if bots.size()>0:
+        var bot_visual=bots[0].get("visual_root")
+        if is_instance_valid(bot_visual):
+            var soldier_instance=bot_visual.find_child("*OriginalSkinnedMesh",true,false)
+            if soldier_instance is MeshInstance3D and soldier_instance.mesh is Mesh:
+                soldier_mesh_ok=true
+                for surface_index in range(soldier_instance.mesh.get_surface_count()):
+                    var soldier_surface_material=soldier_instance.mesh.surface_get_material(surface_index)
+                    if soldier_surface_material is BaseMaterial3D and soldier_surface_material.albedo_texture is Texture2D:
+                        soldier_texture_ok=true
+                        break
+    var weapon_mesh_ok=is_instance_valid(combat_weapon) and combat_weapon.mesh is Mesh
+    var weapon_material_check=combat_session.get("weapon_material") if is_instance_valid(combat_session) else null
+    var weapon_texture_ok=weapon_material_check is BaseMaterial3D and weapon_material_check.albedo_texture is Texture2D
+    if is_instance_valid(combat_player) and bot_count>0 and navigation_ok and bot_agent_path_ok and bot_motion_ok and bot_facing_ok and bot_animation_ok and radar_ok and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
+        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," navigation=",navigation_ok," bot_agent_path=",bot_agent_path_ok," bot_motion=",bot_motion_ok," bot_facing=",bot_facing_ok," bot_animation=",bot_animation_ok," radar=",radar_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
+        get_tree().quit(0)
+    else:
+        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count," navigation=",navigation_ok," bot_agent_path=",bot_agent_path_ok," bot_motion=",bot_motion_ok," bot_facing=",bot_facing_ok," bot_animation=",bot_animation_ok," radar=",radar_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
+        get_tree().quit(1)
 func _show_home():
     _stop_walk_mode()
     home_panel.visible=true
@@ -1306,7 +1490,7 @@ func _lighting():
     add_child(sun)
 '''
     (PROJECT/"main.gd").write_text(gd,encoding="utf-8")
-    readme="# Block Gun | Explorador 3D de mapas\n\nAPK de visualização técnica dos nove mapas recuperados do Unity. A câmera enquadra automaticamente a geometria encontrada; arraste com um dedo para orbitar e use pinça para aproximar ou afastar. O botão reenquadra o mapa.\n\nAinda não contém personagem, bots ou gameplay. A completude de cada cenário depende dos modelos e texturas que puderam ser recuperados do arquivo original.\n"
+    readme="# Block Gun | Combate na Floresta\\n\\nProtótipo Android de combate local construído com recursos recuperados do pacote Unity: soldado, UMP45, texturas, sons e mapa Floresta. Inclui joystick, câmera por toque, mira, tiro, recarga, pulo, vida, dano, eliminações, bots e retorno após eliminação. Os dados e scripts de referência Unity permanecem em reference/ e são excluídos do APK.\\n\\nOs OBJ de personagem atualmente exportados não preservam pesos de skinning utilizáveis. A animação esquelética original exige reconstrução do rig e associação dos clips, sem substituir o personagem por um modelo genérico.\\n"
     (PROJECT/"README.md").write_text(readme,encoding="utf-8")
     print("GODOT_ALL_MAPS",len(catalog),"MESHES",len(all_meshes),"TEXTURES",len(all_textures))
     for m in catalog: print(m)

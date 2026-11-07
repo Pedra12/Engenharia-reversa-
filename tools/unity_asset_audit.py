@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Reconstrói arquivos Unity divididos em .splitN e extrai objetos via UnityPy."""
-import zipfile, pathlib, tempfile, json, csv, re, collections, os, hashlib
+import zipfile, pathlib, tempfile, json, csv, re, collections, os, hashlib, base64
 from pathlib import PurePosixPath
 ARCHIVE=pathlib.Path("blockgun.zip")
 OUT=pathlib.Path("unity_audit"); OUT.mkdir(exist_ok=True)
 EXPORT=OUT/"exported"; EXPORT.mkdir(exist_ok=True)
 rows=[]; errors=[]; counts=collections.Counter(); previews=[]
-skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; library_rows=[]
+skin_records=[]; animation_records=[]; controller_records=[]; avatar_records=[]; scene_records=[]; library_rows=[]
 DATA_PREFIX="resources/assets/bin/Data/"
 
 def safe(s):
@@ -15,19 +15,76 @@ def safe(s):
 def save(path,data):
     path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(data)
 
+def assetfile_label(af):
+    for owner in (af,getattr(af,"file",None) if af is not None else None):
+        if owner is None: continue
+        for attr in ("name","path","file_name","filename"):
+            try:
+                value=getattr(owner,attr,None)
+                if isinstance(value,str) and value and value!="<SerializedFile>":
+                    return value
+            except Exception: pass
+    return str(af or "")
+def source_label(obj):
+    return assetfile_label(getattr(obj,"assets_file",None))
 def json_safe(value, depth=0):
     if depth > 10:
         return str(value)
     if value is None or isinstance(value,(str,int,float,bool)):
         return value
     if isinstance(value,bytes):
-        return {"byte_length":len(value)}
+        if len(value) <= 16 * 1024 * 1024:
+            return {"byte_length":len(value),"base64":base64.b64encode(value).decode("ascii")}
+        return {"byte_length":len(value),"base64_omitted":True}
     if isinstance(value,(list,tuple)):
         return [json_safe(v,depth+1) for v in value]
     if isinstance(value,dict):
         return {str(k):json_safe(v,depth+1) for k,v in value.items()}
+    if hasattr(value,"m_FileID") and hasattr(value,"m_PathID"):
+        target=assetfile_label(getattr(value,"assetsfile",None))
+        return {"m_FileID":int(getattr(value,"m_FileID",0) or 0),"m_PathID":int(getattr(value,"m_PathID",0) or 0),
+                "target_source":target}
+    cls_name=value.__class__.__name__
+    vector_fields={"Vector2f":("x","y"),"Vector3f":("x","y","z"),"Vector4f":("x","y","z","w"),
+                   "Quaternionf":("x","y","z","w"),"Quaternion":("x","y","z","w")}
+    if cls_name in vector_fields:
+        out={}
+        for axis in vector_fields[cls_name]:
+            actual=axis if hasattr(value,axis) else axis.upper()
+            try: out[axis]=float(getattr(value,actual))
+            except Exception: pass
+        if out: return out
+    if cls_name=="ColorRGBA":
+        return {k:float(getattr(value,k)) for k in ("r","g","b","a") if hasattr(value,k)}
+    if all(hasattr(value,f"e{i}{j}") for i in range(4) for j in range(4)):
+        return {"matrix4x4":[[float(getattr(value,f"e{i}{j}")) for j in range(4)] for i in range(4)]}
+    if hasattr(value,"component"):
+        return {"component":json_safe(getattr(value,"component"),depth+1)}
+    cls=value.__class__.__name__
+    if cls=="VertexData":
+        data=getattr(value,"m_DataSize",b"") or b""
+        channels=[]
+        for ch in (getattr(value,"m_Channels",[]) or []):
+            channels.append({k:int(getattr(ch,k,0) or 0) for k in ("stream","offset","format","dimension")})
+        return {"type":"VertexData","m_VertexCount":int(getattr(value,"m_VertexCount",0) or 0),
+                "m_Channels":channels,"m_DataSize":json_safe(data,depth+1)}
+    if cls=="BoneWeights4":
+        return {"weight":json_safe(getattr(value,"weight",[]),depth+1),
+                "boneIndex":json_safe(getattr(value,"boneIndex",[]),depth+1)}
     if hasattr(value,"__dict__"):
         return {str(k):json_safe(v,depth+1) for k,v in vars(value).items() if k not in ("reader","assets_file")}
+    slots=getattr(value.__class__,"__slots__",())
+    if slots:
+        if isinstance(slots,str): slots=(slots,)
+        out={}
+        for key in slots:
+            if key in ("reader","assets_file"): continue
+            try: out[str(key)]=json_safe(getattr(value,key),depth+1)
+            except Exception: pass
+        if out: return out
+    fields=getattr(value,"_fields",())
+    if fields:
+        return {str(k):json_safe(getattr(value,k),depth+1) for k in fields if k not in ("reader","assets_file")}
     return str(value)
 def selected_fields(data, names):
     out={}
@@ -73,17 +130,36 @@ def main():
                             b=src.read(1024*1024)
                             if not b: break
                             out.write(b)
-            # Also parse already-extracted Unity bundle containers, if present.
-            bundle_names=[n for n in names if n.startswith("unity/assets/") and n.lower().endswith((".bundle",".unity3d",".assetbundle"))]
-            for n in bundle_names:
-                dest=root/("bundles"/PurePosixPath(n).name)
+            # Copy valid UnityFS/UnityWeb/UnityRaw bundles outside the base asset root.
+            # They are probed one-by-one later; bulk-loading unrelated Android files can crash UnityPy.
+            bundle_exts=(".bundle",".unity3d",".assetbundle",".ab")
+            bundle_markers=("/aa/android/","/assetbundles/","/streamingassets/")
+            bundle_manifest=[]
+            for n in sorted(x for x in names if not x.endswith("/")):
+                low=n.lower()
+                explicit=low.endswith(bundle_exts)
+                if not explicit and not any(marker in low for marker in bundle_markers):
+                    continue
+                try:
+                    with z.open(n) as src: header=src.read(32)
+                except Exception: continue
+                magic=next((m.decode("ascii") for m in (b"UnityFS",b"UnityWeb",b"UnityRaw",b"UnityArchive",b"CAB-") if header.startswith(m)), "")
+                if not explicit and not magic:
+                    continue
+                rel=PurePosixPath(n)
+                dest=OUT/"bundle_candidates"/(safe(rel.parent.name)+"_"+safe(rel.name))
                 dest.parent.mkdir(parents=True,exist_ok=True)
                 with z.open(n) as src, open(dest,"wb") as out:
+                    total=0
                     while True:
                         b=src.read(1024*1024)
                         if not b: break
-                        out.write(b)
-            print("REASSEMBLED",len(assembled),"BUNDLES",len(bundle_names))
+                        out.write(b); total+=len(b)
+                bundle_manifest.append({"archive_path":n,"extracted_path":str(dest.relative_to(OUT)),"size":total,"magic":magic or "extension"})
+            with open(OUT/"ARCHIVE_BUNDLE_CANDIDATES.csv","w",newline="",encoding="utf-8") as fh:
+                w=csv.DictWriter(fh,fieldnames=["archive_path","extracted_path","size","magic"]);w.writeheader();w.writerows(bundle_manifest)
+            print("REASSEMBLED",len(assembled),"BUNDLE_CANDIDATES",len(bundle_manifest),"BUNDLE_BYTES",sum(x["size"] for x in bundle_manifest))
+            for entry in bundle_manifest: print("BUNDLE_CANDIDATE",entry)
             env=UnityPy.load(str(root))
             objects=list(env.objects)
             print("UNITY_OBJECTS",len(objects))
@@ -93,22 +169,59 @@ def main():
                     data=obj.read()
                     name=getattr(data,"m_Name","") or getattr(data,"name","") or ""
                     pid=getattr(obj,"path_id",idx)
-                    source=str(getattr(obj,"assets_file",None) or "")
+                    source=source_label(obj)
                     row={"source":source[:220],"path_id":str(pid),"type":typ,"name":str(name)[:250],"status":"metadata"}
                     counts[typ]+=1
                     base=safe(pathlib.Path(source).stem)+"_"+safe(typ)+"_"+safe(name or pid)
                     if typ=="Mesh" and (str(name).startswith("sk_char_") or str(name) in ("sk_gloves","sk_bomb_fp")):
                         skin_records.append({"source":source,"path_id":str(pid),"name":str(name),
-                          "fields":selected_fields(data,["m_Vertices","m_Normals","m_UV0","m_Skin","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_SubMeshes"])})
+                          "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
+                          "fields":selected_fields(data,["m_Vertices","m_Normals","m_UV0","m_UV1","m_Skin","m_BindPose","m_BoneNameHashes","m_RootBoneNameHash","m_SubMeshes","m_Indices","m_VertexData","m_CompressedMesh"])})
                     elif typ=="AnimationClip":
                         animation_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_SampleRate","m_Legacy","m_Compressed","m_UseHighQualityCurve","m_RotationCurves","m_PositionCurves","m_ScaleCurves","m_FloatCurves","m_PPtrCurves","m_MuscleClip","m_ClipBindingConstant","m_AnimationClipSettings"])})
                     elif typ=="AnimatorController":
                         controller_records.append({"source":source,"path_id":str(pid),"name":str(name),
-                          "fields":selected_fields(data,["m_AnimatorLayers","m_AnimatorParameters","m_Controller"])})
+                          "fields":selected_fields(data,["m_AnimatorLayers","m_AnimatorParameters","m_Controller","m_AnimationClips","m_ClipArray","m_ClipCount","m_MotionSet","m_ClipIDArray"])})
                     elif typ=="Avatar":
                         avatar_records.append({"source":source,"path_id":str(pid),"name":str(name),
                           "fields":selected_fields(data,["m_Avatar","m_TOS","m_Name"])})
+                    scene_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable","NavMeshSettings","NavMeshData")
+                    if typ in scene_types:
+                        fields_by_type={
+                          "GameObject":["m_Component","m_IsActive","m_Layer","m_Tag","m_Name","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject","m_PrefabInternal","m_PrefabParentObject"],
+                          "Transform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
+                          "RectTransform":["m_GameObject","m_Father","m_Children","m_LocalPosition","m_LocalRotation","m_LocalScale","m_AnchorMin","m_AnchorMax","m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_Pivot","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
+                          "Canvas":["m_GameObject","m_Enabled","m_RenderMode","m_Camera","m_SortingOrder","m_TargetDisplay"],
+                          "CanvasRenderer":["m_GameObject","m_CullTransparentMesh"],
+                          "CanvasGroup":["m_GameObject","m_Enabled","m_Alpha","m_Interactable","m_BlocksRaycasts"],
+                          "Image":["m_GameObject","m_Enabled","m_Sprite","m_Color","m_Material","m_RaycastTarget","m_Type","m_FillMethod","m_FillAmount","m_FillCenter","m_FillClockwise","m_FillOrigin","m_UseSpriteMesh","m_PreserveAspect","m_Maskable"],
+                          "RawImage":["m_GameObject","m_Enabled","m_Texture","m_Color","m_RaycastTarget","m_UVRect","m_Maskable"],
+                          "Button":["m_GameObject","m_Enabled","m_Interactable","m_Transition","m_Colors","m_SpriteState","m_AnimationTriggers","m_TargetGraphic","m_OnClick"],
+                          "Text":["m_GameObject","m_Enabled","m_Text","m_Font","m_FontSize","m_FontStyle","m_Color","m_Alignment","m_HorizontalOverflow","m_VerticalOverflow","m_RichText"],
+                          "TextMeshProUGUI":["m_GameObject","m_Enabled","m_text","m_fontSize","m_fontAsset","m_color","m_alignment","m_enableAutoSizing"],
+                          "CanvasScaler":["m_GameObject","m_Enabled","m_UiScaleMode","m_ReferencePixelsPerUnit","m_ScaleFactor","m_ReferenceResolution","m_ScreenMatchMode","m_MatchWidthOrHeight"],
+                          "GraphicRaycaster":["m_GameObject","m_Enabled","m_IgnoreReversedGraphics","m_BlockingObjects","m_BlockingMask"],
+                          "MonoBehaviour":["m_GameObject","m_Enabled","m_Script","m_PrefabInstance","m_PrefabAsset","m_CorrespondingSourceObject"],
+                          "MeshFilter":["m_GameObject","m_Mesh"],
+                          "MeshRenderer":["m_GameObject","m_Enabled","m_Materials"],
+                          "SkinnedMeshRenderer":["m_GameObject","m_Enabled","m_Materials","m_Mesh","m_Bones","m_RootBone","m_LocalAABB"],
+                          "Animator":["m_GameObject","m_Enabled","m_Avatar","m_Controller","m_ApplyRootMotion","m_UpdateMode","m_CullingMode"],
+                          "SpriteRenderer":["m_GameObject","m_Enabled","m_Sprite","m_Color"],
+                          "AudioSource":["m_GameObject","m_Enabled","m_audioClip","m_Volume","m_Pitch","m_Loop","m_PlayOnAwake"],
+                          "Camera":["m_GameObject","m_Enabled","m_FieldOfView","m_NearClipPlane","m_FarClipPlane"],
+                          "PrefabInstance":["m_SourcePrefab","m_Modification","m_RemovedComponents","m_AddedComponents","m_TransformParent"],
+                          "PrefabModification":["m_Target","m_PropertyPath","m_Value","m_ObjectReference"],
+                          "PropertyModification":["target","propertyPath","value","objectReference"]
+                        }
+                        serialized_fields = json_safe(data) if typ in ("NavMeshSettings", "NavMeshData") else selected_fields(data,fields_by_type.get(typ,[]))
+                        record={"source":source,"path_id":str(pid),"type":typ,"name":str(name)[:250],
+                                "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
+                                "fields":serialized_fields}
+                        if typ in ("MonoBehaviour","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable"):
+                            try: record["serialized_fields"]=json_safe(obj.read_typetree())
+                            except Exception as e: record["typetree_error"]=str(e)[:200]
+                        scene_records.append(record)
                     if typ in ("Texture2D","Sprite"):
                         try:
                             im=data.image
@@ -143,6 +256,22 @@ def main():
                     rows.append(row)
                 except Exception as e:
                     errors.append("object "+str(getattr(obj,"path_id",idx))+": "+str(e)[:250])
+                    # Keep failed component records too. Unity UI Image/Button and some
+                    # custom MonoBehaviours can have a valid typetree even when obj.read()
+                    # fails; their PPtrs are essential to reconstruct the original HUD.
+                    try:
+                        fallback_types=("GameObject","Transform","RectTransform","Canvas","CanvasRenderer","CanvasGroup","MonoBehaviour","MeshFilter","MeshRenderer","SkinnedMeshRenderer","Animator","SpriteRenderer","AudioSource","Camera","PrefabInstance","PrefabModification","PropertyModification","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable")
+                        if typ in fallback_types:
+                            fallback={"source":source_label(obj),"path_id":str(getattr(obj,"path_id",idx)),"type":typ,"name":"",
+                                "external_files":json_safe(getattr(getattr(obj,"assets_file",None),"externals",[]) or []),
+                                "fields":{},"read_error":str(e)[:250]}
+                            try:
+                                fallback["serialized_fields"]=json_safe(obj.read_typetree())
+                            except Exception as tree_error:
+                                fallback["typetree_error"]=str(tree_error)[:250]
+                            scene_records.append(fallback)
+                    except Exception:
+                        pass
     # Preserve a curated, traceable library of gameplay assets and source stubs.
     source_assets=OUT/"source_assets"
     source_scripts=OUT/"source_scripts"
@@ -180,7 +309,126 @@ def main():
                 continue
             blob=source_zip.read(n); save(dest,blob)
             library_rows.append({"category":dest.parent.name,"original_path":n,"exported_path":str(dest),"size_bytes":len(blob),"sha256":hashlib.sha256(blob).hexdigest()})
+    # Preserve the exact renderer, mesh, armature and bone Transform hierarchy for every recovered skinned mesh.
+    catalog_by_key={(r.get("source",""),str(r.get("path_id",""))):r for r in rows}
+    transform_by_key={(r.get("source",""),str(r.get("path_id",""))):r for r in scene_records if r.get("type") in ("Transform","RectTransform")}
+    gameobject_by_key={(r.get("source",""),str(r.get("path_id",""))):r for r in scene_records if r.get("type")=="GameObject"}
+    transform_by_go={}
+    for tr in transform_by_key.values():
+        gp=tr.get("fields",{}).get("m_GameObject",{})
+        transform_by_go[(tr.get("source",""),str(gp.get("m_PathID","0")))]=tr
+    skin_names={x.get("name","") for x in skin_records}
+    def resolve_record_source(owner_source, external_files, ptr):
+        if not isinstance(ptr,dict): return owner_source
+        fid=int(ptr.get("m_FileID",0) or 0)
+        if fid>0 and fid<=len(external_files):
+            return str(external_files[fid-1].get("path",owner_source))
+        return owner_source
+    included_transforms={}
+    included_gameobjects={}
+    rig_renderers=[]
+    def add_transform_chain(src,pid):
+        current=str(pid)
+        visited=set()
+        while current and current!="0" and (src,current) not in visited:
+            visited.add((src,current))
+            tr=transform_by_key.get((src,current))
+            if not tr: break
+            included_transforms[(src,current)]=tr
+            gp=tr.get("fields",{}).get("m_GameObject",{})
+            gsrc=resolve_record_source(src,tr.get("external_files",[]),gp)
+            gid=str(gp.get("m_PathID","0"))
+            go=gameobject_by_key.get((gsrc,gid))
+            if go: included_gameobjects[(gsrc,gid)]=go
+            father=tr.get("fields",{}).get("m_Father",{})
+            src=resolve_record_source(src,tr.get("external_files",[]),father)
+            current=str(father.get("m_PathID","0"))
+    for smr in (r for r in scene_records if r.get("type")=="SkinnedMeshRenderer"):
+        fields=smr.get("fields",{}); ext=smr.get("external_files",[])
+        mesh_ptr=fields.get("m_Mesh",{})
+        mesh_source=resolve_record_source(smr.get("source",""),ext,mesh_ptr)
+        mesh_row=catalog_by_key.get((mesh_source,str(mesh_ptr.get("m_PathID","0"))),{})
+        mesh_name=mesh_row.get("name","")
+        if mesh_name not in skin_names: continue
+        go_ptr=fields.get("m_GameObject",{})
+        go_source=resolve_record_source(smr.get("source",""),ext,go_ptr)
+        go_id=str(go_ptr.get("m_PathID","0"))
+        go=gameobject_by_key.get((go_source,go_id))
+        mesh_tr=transform_by_go.get((go_source,go_id))
+        if mesh_tr: add_transform_chain(mesh_tr.get("source",""),mesh_tr.get("path_id","0"))
+        bone_records=[]
+        for bone_index,bone_ptr in enumerate(fields.get("m_Bones",[]) or []):
+            bone_source=resolve_record_source(smr.get("source",""),ext,bone_ptr)
+            bone_id=str(bone_ptr.get("m_PathID","0"))
+            if bone_id!="0": add_transform_chain(bone_source,bone_id)
+            bone_records.append({"mesh_bone_index":bone_index,"source":bone_source,"path_id":bone_id})
+        root_ptr=fields.get("m_RootBone",{})
+        root_source=resolve_record_source(smr.get("source",""),ext,root_ptr)
+        if str(root_ptr.get("m_PathID","0"))!="0": add_transform_chain(root_source,root_ptr.get("m_PathID","0"))
+        rig_renderers.append({"source":smr.get("source"),"path_id":smr.get("path_id"),"mesh_name":mesh_name,
+            "mesh_source":mesh_source,"mesh_path_id":str(mesh_ptr.get("m_PathID","0")),
+            "gameobject_source":go_source,"gameobject_path_id":go_id,"gameobject_name":go.get("name","") if go else "",
+            "mesh_transform":mesh_tr,"bones":bone_records,"root_bone":{"source":root_source,"path_id":str(root_ptr.get("m_PathID","0"))},
+            "materials":fields.get("m_Materials",[])})
+    (OUT/"UNITY_RIG_HIERARCHY.json").write_text(json.dumps({"renderers":rig_renderers,
+        "transforms":list(included_transforms.values()),"gameobjects":list(included_gameobjects.values())},ensure_ascii=False,indent=2),encoding="utf-8")
+    # Export the complete original gameplay HUD hierarchy and exact RectTransform layout.
+    hud_root=next((r for r in scene_records if r.get("type")=="GameObject" and r.get("name")=="WindowPlayer"),None)
+    hud_elements=[]
+    if hud_root:
+        hud_source=hud_root.get("source","")
+        def walk_hud(src,transform_id,parent_path="",depth=0):
+            if depth>32: return
+            tr=transform_by_key.get((src,str(transform_id)))
+            if not tr: return
+            tf=tr.get("fields",{})
+            gp=tf.get("m_GameObject",{})
+            gsrc=resolve_record_source(src,tr.get("external_files",[]),gp)
+            gid=str(gp.get("m_PathID","0"))
+            go=gameobject_by_key.get((gsrc,gid))
+            if not go: return
+            name=go.get("name","")
+            path=(parent_path+"/"+name).strip("/")
+            components=[]
+            for pair in go.get("fields",{}).get("m_Component",[]) or []:
+                ptr=pair.get("component",{})
+                csrc=resolve_record_source(gsrc,go.get("external_files",[]),ptr)
+                cid=str(ptr.get("m_PathID","0"))
+                comp=next((x for x in scene_records if x.get("source")==csrc and str(x.get("path_id"))==cid),None)
+                component={"source":csrc,"path_id":cid,"type":comp.get("type","") if comp else "",
+                    "name":comp.get("name","") if comp else "","resolved":bool(comp)}
+                if comp:
+                    component["fields"]=comp.get("fields",{})
+                    serialized=comp.get("serialized_fields",{}) if comp.get("type") in ("MonoBehaviour","Image","RawImage","Button","Text","TextMeshProUGUI","TextMeshPro","CanvasScaler","GraphicRaycaster","EventSystem","StandaloneInputModule","InputSystemUIInputModule","ScrollRect","Slider","Toggle","Scrollbar","Mask","RectMask2D","HorizontalLayoutGroup","VerticalLayoutGroup","GridLayoutGroup","LayoutElement","ContentSizeFitter","AspectRatioFitter","Outline","Shadow","InputField","Dropdown","ToggleGroup","Selectable") else {}
+                    component["serialized_fields"]=serialized
+                    script_ptr=serialized.get("m_Script",{}) if isinstance(serialized,dict) else {}
+                    if isinstance(script_ptr,dict) and script_ptr.get("m_PathID"):
+                        script_source=resolve_record_source(csrc,comp.get("external_files",[]),script_ptr)
+                        script_row=catalog_by_key.get((script_source,str(script_ptr.get("m_PathID"))))
+                        component["script_name"]=script_row.get("name","") if script_row else ""
+                    for sprite_field in ("m_Sprite","m_OverrideSprite","m_SpriteState"):
+                        sprite_ptr=serialized.get(sprite_field,{}) if isinstance(serialized,dict) else {}
+                        if isinstance(sprite_ptr,dict) and sprite_ptr.get("m_PathID"):
+                            sprite_source=resolve_record_source(csrc,comp.get("external_files",[]),sprite_ptr)
+                            sprite_row=catalog_by_key.get((sprite_source,str(sprite_ptr.get("m_PathID"))))
+                            if sprite_row:
+                                component["sprite_name"]=sprite_row.get("name","")
+                                component["sprite_exported"]=sprite_row.get("exported","")
+                                component["sprite_source"]=sprite_source
+                                break
+                components.append(component)
+            rect={k:tf[k] for k in ("m_AnchoredPosition","m_AnchoredPosition3D","m_SizeDelta","m_AnchorMin","m_AnchorMax","m_Pivot","m_LocalPosition","m_LocalRotation","m_LocalScale") if k in tf}
+            hud_elements.append({"source":gsrc,"path_id":gid,"name":name,"path":path,"parent_path":parent_path,
+                "depth":depth,"active":go.get("fields",{}).get("m_IsActive",True),"layer":go.get("fields",{}).get("m_Layer",0),
+                "rect":rect,"components":components})
+            for child in tf.get("m_Children",[]) or []:
+                csrc=resolve_record_source(src,tr.get("external_files",[]),child)
+                walk_hud(csrc,child.get("m_PathID","0"),path,depth+1)
+        root_transform=transform_by_go.get((hud_source,str(hud_root.get("path_id"))))
+        if root_transform: walk_hud(hud_source,root_transform.get("path_id","0"))
+    (OUT/"UNITY_HUD_LAYOUT.json").write_text(json.dumps({"root":"WindowPlayer","elements":hud_elements},ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_SKINNING_DATA.json").write_text(json.dumps(skin_records,ensure_ascii=False,indent=2),encoding="utf-8")
+    (OUT/"UNITY_SCENE_OBJECTS.json").write_text(json.dumps(scene_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATION_DATA.json").write_text(json.dumps(animation_records,ensure_ascii=False,indent=2),encoding="utf-8")
     (OUT/"UNITY_ANIMATOR_DATA.json").write_text(json.dumps({"controllers":controller_records,"avatars":avatar_records},ensure_ascii=False,indent=2),encoding="utf-8")
     with open(OUT/"GAMEPLAY_ASSET_LIBRARY.csv","w",newline="",encoding="utf-8") as f:
@@ -189,7 +437,7 @@ def main():
     with open(OUT/"UNITY_OBJECT_CATALOG.csv","w",newline="",encoding="utf-8") as f:
         fields=sorted({k for r in rows for k in r}); w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
     summary={"input_zip_bytes":ARCHIVE.stat().st_size,"split_families_reassembled":len(assembled),
-      "split_sources":sum(x[2] for x in assembled),"bundle_files":len(bundle_names),
+      "split_sources":sum(x[2] for x in assembled),"bundle_files":len(bundle_manifest),
       "objects_catalogued":len(rows),"types":dict(counts.most_common()),
       "exported_files":sum(1 for r in rows if r.get("exported")),"skinned_meshes":len(skin_records),"animation_clips":len(animation_records),"gameplay_library_files":len(library_rows),"errors_count":len(errors),"errors":errors[:500]}
     (OUT/"UNITY_ASSET_AUDIT.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -202,7 +450,7 @@ def main():
     lines=["# Auditoria especializada de recursos Unity - Block Gun 3D","",
       "- Famílias .split reconstruídas: **%s**"%len(assembled),
       "- Partes .split utilizadas: **%s**"%summary["split_sources"],
-      "- Bundles Unity adicionais: **%s**"%len(bundle_names),
+      "- Bundles Unity adicionais: **%s**"%len(bundle_manifest),
       "- Objetos catalogados: **%s**"%len(rows),
       "- Tipos Unity: **%s**"%len(counts),
       "- Objetos exportados: **%s**"%summary["exported_files"],

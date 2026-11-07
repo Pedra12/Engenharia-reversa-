@@ -1,0 +1,58 @@
+name: Block Gun - Deep original combat forensics
+
+on:
+  push:
+    branches: [feature/floresta-combate-mobile]
+    paths:
+      - ".github/workflows/combat-deep-audit.yml"
+      - "tools/combat_deep_audit.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deep-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/floresta-combate-mobile
+      - name: Install archive tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+      - name: Download and verify original decompiled release
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/Pedra12/Engenharia-reversa-/releases/download/V1.0/Block%2BGun%2B3D_%2BFPS%2BShooter%2BPvP_2.0.3_APKPure.apk_Decompiler.com.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o blockgun.zip
+          echo "Downloaded bytes: $(stat -c%s blockgun.zip)"
+          echo "e3e3cc4afac58236657240cc8c403fb56c9b02c9f8efa3b77bcc6044b1b480c0  blockgun.zip" | sha256sum -c -
+      - name: Install Unity extraction libraries
+        run: python3 -m pip install --disable-pip-version-check UnityPy Pillow
+      - name: Extract and catalog all original Unity assets
+        run: python3 tools/unity_asset_audit.py
+      - name: Build relational scene and object references
+        run: python3 tools/unity_scene_graph.py
+      - name: Probe original Addressables bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d unity_audit/bundle_candidates ]; then
+            python3 tools/unity_bundle_probe.py unity_audit/bundle_candidates unity_audit/bundle_probe
+          else
+            echo "No standalone bundles found."
+          fi
+      - name: Deeply map battle code, gameplay components, controls, rigs and animations
+        run: python3 tools/combat_deep_audit.py
+      - name: Upload deep combat source audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockGun-Combat-Deep-Audit
+          path: unity_audit/combat_deep/
+          if-no-files-found: error
+          retention-days: 30

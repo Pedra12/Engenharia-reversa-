@@ -22,6 +22,19 @@ FIELDS = {
  "Material": ("m_Shader",),
  "LightmapSettings": ("m_Lightmaps",),
  "MonoBehaviour": ("m_GameObject","m_Script"),
+ "Image":("m_GameObject","m_Sprite","m_Color","m_Material"),
+ "RawImage":("m_GameObject","m_Texture","m_Color"),
+ "Button":("m_GameObject","m_Interactable","m_TargetGraphic","m_OnClick"),
+ "Text":("m_GameObject","m_Text","m_Font","m_Color"),
+ "TextMeshProUGUI":("m_GameObject","m_text","m_fontAsset","m_color"),
+ "Canvas":("m_GameObject","m_RenderMode","m_Camera","m_SortingOrder"),
+ "CanvasScaler":("m_GameObject","m_UiScaleMode","m_ReferenceResolution","m_MatchWidthOrHeight"),
+ "Animator": ("m_GameObject","m_Avatar","m_Controller"),
+ "AudioSource":("m_GameObject","m_audioClip","m_Volume","m_Pitch","m_PlayOnAwake"),
+ "ParticleSystem":("m_GameObject","m_Enabled"),
+ "TrailRenderer":("m_GameObject","m_Materials"),
+ "LineRenderer":("m_GameObject","m_Materials"),
+ "CharacterController":("m_GameObject","m_Radius","m_Height"),
  "Rigidbody": ("m_GameObject",), "Light": ("m_GameObject",), "Camera": ("m_GameObject",)
 }
 TRANSFORMS = {"Transform","RectTransform"}
