@@ -18,6 +18,7 @@ on:
       - "tools/convert_unity_rigs.py"
       - "tools/convert_unity_animations.py"
       - "tools/convert_bundle_weapon_rigs.py"
+      - "tools/extract_forest_spawn_points.py"
       - "tools/map_quality_audit.py"
       - "combat/**"
   workflow_dispatch:
