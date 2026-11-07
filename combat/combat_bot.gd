@@ -3,6 +3,8 @@ extends CharacterBody3D
 const ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_animation_player.gd")
 
 var target: CharacterBody3D
+var team_id := 1
+var respawn_position := Vector3.ZERO
 var combat: Node
 var rig_loader: OriginalRigLoader
 var health := 100.0
@@ -19,8 +21,9 @@ var navigation_agent: NavigationAgent3D
 var shoot_animation_timer := 0.0
 var current_locomotion := ""
 
-func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_loader: OriginalRigLoader, original_weapon_mesh: Mesh, original_weapon_material: Material) -> void:
+func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_loader: OriginalRigLoader, original_weapon_mesh: Mesh, original_weapon_material: Material, assigned_team: int = 1) -> void:
 	target = player_target
+	team_id = assigned_team
 	combat = combat_owner
 	rig_loader = original_rig_loader
 	collision_layer = 4 # layer 3: bots
@@ -80,7 +83,16 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 		weapon_mount.add_child(weapon_visual)
 
 func _physics_process(delta: float) -> void:
-	if dead or not is_instance_valid(target):
+	if dead or not is_instance_valid(combat):
+		return
+	var selected_target = combat.call("get_best_target", self, team_id)
+	if selected_target is CharacterBody3D:
+		target = selected_target
+	if not is_instance_valid(target):
+		velocity.x = move_toward(velocity.x, 0.0, speed * delta)
+		velocity.z = move_toward(velocity.z, 0.0, speed * delta)
+		velocity.y -= 18.0 * delta
+		move_and_slide()
 		return
 	shoot_cooldown = maxf(0.0, shoot_cooldown - delta)
 	shoot_animation_timer = maxf(0.0, shoot_animation_timer - delta)
@@ -155,6 +167,22 @@ func _has_clear_shot() -> bool:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	return not hit.is_empty() and hit.collider == target
 
+func reset_for_respawn(new_position: Vector3) -> void:
+	dead = false
+	health = 100.0
+	shoot_cooldown = 1.0
+	shoot_animation_timer = 0.0
+	current_locomotion = ""
+	velocity = Vector3.ZERO
+	global_position = new_position
+	rotation = Vector3.ZERO
+	collision_layer = 4
+	collision_mask = 3
+	set_physics_process(true)
+	visible = true
+	if anim_player and anim_player.has_clip("Rifle_Idle_gun_down"):
+		anim_player.play("Rifle_Idle_gun_down", 0.12, 1.0, true)
+
 func take_damage(amount: float, headshot: bool = false) -> bool:
 	if dead:
 		return false
@@ -171,6 +199,6 @@ func take_damage(amount: float, headshot: bool = false) -> bool:
 			elif anim_player.has_clip("Hit Reaction"):
 				anim_player.play("Hit Reaction", 0.04, 1.0, false)
 		if is_instance_valid(combat):
-			combat.call("bot_killed", self)
+			combat.call("bot_killed", self, team_id)
 		return true
 	return false
