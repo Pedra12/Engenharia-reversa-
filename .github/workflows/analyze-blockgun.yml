@@ -1,7 +1,7 @@
 name: Block Gun - Floresta combat build and asset audit
 
 concurrency:
-  group: blockgun-${{ github.ref }}
+  group: blockgun-combat-validation-${{ github.ref }}
   cancel-in-progress: true
 
 on:
