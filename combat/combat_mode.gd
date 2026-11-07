@@ -64,6 +64,7 @@ var match_timer_label: Label
 var team_score_label: Label
 var result_panel: Panel
 var result_label: Label
+var result_score_label: Label
 var pickup_areas: Array[Area3D] = []
 var pickup_respawn_timers: Array[float] = []
 var pickup_types: Array[int] = []
@@ -497,9 +498,9 @@ func _build_hud() -> void:
 	result_label.size = Vector2(400, 70)
 	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_label.visible = true
-	var result_score := _new_label(result_panel, "PLACAR FINAL", Vector2(30, 112), 22)
-	result_score.size = Vector2(400, 40)
-	result_score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_score_label = _new_label(result_panel, "AZUL 00  |  VERMELHO 00", Vector2(30, 112), 22)
+	result_score_label.size = Vector2(400, 40)
+	result_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hit_label = _new_label(hud, "+28", Vector2.ZERO, 30)
 	hit_label.visible = false
 	hit_label.set_anchors_preset(Control.PRESET_CENTER)
@@ -998,6 +999,8 @@ func _finish_match(result: String) -> void:
 		result_panel.visible = true
 	if is_instance_valid(result_label):
 		result_label.visible = true
+	if is_instance_valid(result_score_label):
+		result_score_label.text = "AZUL %02d  |  VERMELHO %02d" % [blue_team_score, red_team_score]
 	_update_match_hud()
 
 func _respawn_bot(bot: Node3D, team_id: int) -> void:
