@@ -268,6 +268,8 @@ def main():
     subprocess.run([sys.executable,"tools/convert_bundle_weapon_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
     # Recover the real forest map center and spawn groups from the original level5 scene.
     subprocess.run([sys.executable,"tools/extract_forest_spawn_points.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    # Recover the exact walkable surface and off-mesh links from the original level5 NavMeshData.
+    subprocess.run([sys.executable,"tools/extract_forest_navmesh.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
     combat_files=list(combat_assets.rglob("*"))
     required=[
         combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
