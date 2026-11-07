@@ -266,6 +266,8 @@ def main():
     # Build a real skinned first-person UMP45 rig from the original bundle.
     # This is separate from the older static OBJ reference used by the prototype.
     subprocess.run([sys.executable,"tools/convert_bundle_weapon_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
+    # Recover the real forest map center and spawn groups from the original level5 scene.
+    subprocess.run([sys.executable,"tools/extract_forest_spawn_points.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
     combat_files=list(combat_assets.rglob("*"))
     required=[
         combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
