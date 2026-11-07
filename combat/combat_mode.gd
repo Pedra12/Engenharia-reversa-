@@ -239,7 +239,7 @@ func _create_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "CombatPlayer"
 	player.collision_layer = 2
-	player.collision_mask = 1
+	player.collision_mask = 5 # world (1) + bots (3)
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.4
 	capsule.height = 1.8
@@ -658,7 +658,7 @@ func _fire() -> void:
 	var origin = camera.global_position
 	var direction = -camera.global_transform.basis.z
 	var query = PhysicsRayQueryParameters3D.create(origin, origin + direction * 110.0)
-	query.collision_mask = 1
+	query.collision_mask = 5 # world (1) blocks shots; bot hitboxes use layer 3
 	query.exclude = [player.get_rid()]
 	var hit = get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
