@@ -688,10 +688,23 @@ func _run_combat_audit():
     var bot_count=world.find_children("BotSoldier_*","CharacterBody3D",true,false).size() if is_instance_valid(world) else 0
     var combat_player=combat_session.get("player") if is_instance_valid(combat_session) else null
     var combat_weapon=combat_session.get("weapon_mesh") if is_instance_valid(combat_session) else null
-    var soldier_mesh_ok=combat_session.get("soldier_mesh") is Mesh if is_instance_valid(combat_session) else false
+    var bots=world.find_children("BotSoldier_*","CharacterBody3D",true,false) if is_instance_valid(world) else []
+    var soldier_mesh_ok=false
+    var soldier_texture_ok=false
+    if bots.size()>0:
+        var bot_visual=bots[0].get("visual_root")
+        if is_instance_valid(bot_visual):
+            var soldier_instance=bot_visual.find_child("*OriginalSkinnedMesh",true,false)
+            if soldier_instance is MeshInstance3D and soldier_instance.mesh is Mesh:
+                soldier_mesh_ok=true
+                for surface_index in range(soldier_instance.mesh.get_surface_count()):
+                    var soldier_surface_material=soldier_instance.mesh.surface_get_material(surface_index)
+                    if soldier_surface_material is BaseMaterial3D and soldier_surface_material.albedo_texture is Texture2D:
+                        soldier_texture_ok=true
+                        break
     var weapon_mesh_ok=is_instance_valid(combat_weapon) and combat_weapon.mesh is Mesh
-    var soldier_texture_ok=combat_session.get("soldier_material").albedo_texture is Texture2D if is_instance_valid(combat_session) else false
-    var weapon_texture_ok=combat_session.get("weapon_material").albedo_texture is Texture2D if is_instance_valid(combat_session) else false
+    var weapon_material_check=combat_session.get("weapon_material") if is_instance_valid(combat_session) else null
+    var weapon_texture_ok=weapon_material_check is BaseMaterial3D and weapon_material_check.albedo_texture is Texture2D
     if is_instance_valid(combat_player) and bot_count>0 and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
         print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(0)
