@@ -577,6 +577,10 @@ func _physics_process(delta: float) -> void:
 			player.visible = true
 			_update_hud()
 			status_label.text = "VOCÊ RETORNOU AO COMBATE"
+		else:
+			# A dead player must not keep moving or firing invisibly before respawn.
+			player.velocity = Vector3.ZERO
+			return
 	var input_dir = move_vector
 	if Input.is_key_pressed(KEY_W): input_dir.y = 1.0
 	if Input.is_key_pressed(KEY_S): input_dir.y = -1.0
