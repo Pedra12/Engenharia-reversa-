@@ -430,7 +430,7 @@ func _on_pickup_body_entered(body: Node3D, index: int) -> void:
 	else:
 		var total_added := 0
 		for weapon_index_value in range(WEAPON_CATALOG.size()):
-			var amount := maxi(1, int(WEAPON_CATALOG[weapon_index_value]["reserve"]) / 2)
+			var amount := maxi(1, int(float(WEAPON_CATALOG[weapon_index_value]["reserve"]) * 0.5))
 			weapon_reserves[weapon_index_value] += amount
 			total_added += amount
 		reserve_ammo = weapon_reserves[weapon_index]
