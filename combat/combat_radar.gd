@@ -3,10 +3,41 @@ extends Control
 var player: Node3D
 var bots: Array = []
 var radar_range := 85.0
+var forest_map_texture: Texture2D
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
+	var map_path := _find_forest_minimap("res://assets/unity_original/textures")
+	if not map_path.is_empty():
+		var source := Image.load_from_file(map_path)
+		if source != null and not source.is_empty():
+			# Preserve the original forest minimap artwork and mask it to the
+			# same circular viewport used by the recovered Unity radar.
+			var width := source.get_width()
+			var height := source.get_height()
+			var center := Vector2(width, height) * 0.5
+			var radius := minf(width, height) * 0.5
+			for y in range(height):
+				for x in range(width):
+					if Vector2(x + 0.5, y + 0.5).distance_to(center) > radius:
+						var pixel := source.get_pixel(x, y)
+						pixel.a = 0.0
+						source.set_pixel(x, y, pixel)
+			forest_map_texture = ImageTexture.create_from_image(source)
+
+func _find_forest_minimap(folder_path: String) -> String:
+	var directory := DirAccess.open(folder_path)
+	if directory == null:
+		return ""
+	for file_name in directory.get_files():
+		if file_name.to_lower().contains("minimap_forest") and file_name.to_lower().ends_with(".png"):
+			return folder_path.path_join(file_name)
+	for child_name in directory.get_directories():
+		var found := _find_forest_minimap(folder_path.path_join(child_name))
+		if not found.is_empty():
+			return found
+	return ""
 
 func update_radar(player_node: Node3D, bot_nodes: Array) -> void:
 	player = player_node
@@ -17,7 +48,9 @@ func _draw() -> void:
 	var center := size * 0.5
 	var radius := minf(size.x, size.y) * 0.47
 	draw_circle(center, radius, Color(0.018, 0.055, 0.072, 0.76))
-	draw_circle(center, radius * 0.72, Color(0.035, 0.105, 0.12, 0.25))
+	if forest_map_texture:
+		draw_texture_rect(forest_map_texture, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0), false, Color(1.0, 1.0, 1.0, 0.88))
+	draw_circle(center, radius * 0.72, Color(0.035, 0.105, 0.12, 0.12))
 	draw_arc(center, radius, 0.0, TAU, 72, Color(0.42, 0.72, 0.78, 0.86), 2.2, true)
 	draw_arc(center, radius * 0.66, 0.0, TAU, 64, Color(0.32, 0.61, 0.67, 0.42), 1.0, true)
 	draw_arc(center, radius * 0.33, 0.0, TAU, 48, Color(0.32, 0.61, 0.67, 0.32), 1.0, true)
