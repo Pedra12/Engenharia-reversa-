@@ -388,7 +388,7 @@ func _build_hud() -> void:
 	_make_button("PULAR", Vector2(-191.5, -423.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _jump, true)
 	_make_button("RECARREGAR", Vector2(-562.5, -419.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _reload, true, reload_icon)
 	_make_button("AGACHAR", Vector2(-422.5, -193.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_crouch, true)
-	_make_button("SAIR", Vector2(18.0, -82.0) * ui_scale, Vector2(88.0, 54.0) * ui_scale, _exit_combat, false)
+	_make_button("SAIR", Vector2(18.0, 116.0) * ui_scale, Vector2(88.0, 54.0) * ui_scale, _exit_combat, false)
 	var crosshair := Label.new()
 	crosshair.text = "＋"
 	crosshair.set_anchors_preset(Control.PRESET_CENTER)
