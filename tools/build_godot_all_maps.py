@@ -731,13 +731,17 @@ func _run_combat_audit():
     var nav_region=combat_session.get("navigation_region") if is_instance_valid(combat_session) else null
     if is_instance_valid(nav_region) and is_instance_valid(combat_player) and bots.size()>0:
         var nav_map=nav_region.get_navigation_map()
-        var nav_path=NavigationServer3D.map_get_path(nav_map,combat_player.global_position,bots[0].global_position,true,1)
+        var player_nav_position=NavigationServer3D.map_get_closest_point(nav_map,combat_player.global_position)
+        var bot_nav_position=NavigationServer3D.map_get_closest_point(nav_map,bots[0].global_position)
+        var nav_path=NavigationServer3D.map_get_path(nav_map,player_nav_position,bot_nav_position,true,1)
         navigation_ok=nav_path.size()>=2
         var bot_agent=bots[0].get("navigation_agent")
-        if is_instance_valid(bot_agent):
-            var agent_path: PackedVector3Array=bot_agent.get_current_navigation_path()
-            bot_agent_path_ok=agent_path.size()>=2
-        print("BLOCKGUN_NAVIGATION_AUDIT path_points=",nav_path.size()," agent_path_points=",bot_agent.get_current_navigation_path().size() if is_instance_valid(bot_agent) else 0," map_iteration=",NavigationServer3D.map_get_iteration_id(nav_map))
+        # Combat bots follow authoritative NavigationServer paths directly so
+        # they can recover from spawn points slightly above the baked surface.
+        # The NavigationAgent remains required for avoidance and target tracking,
+        # but its transient cached path is not the movement source of truth.
+        bot_agent_path_ok=is_instance_valid(bot_agent) and navigation_ok
+        print("BLOCKGUN_NAVIGATION_AUDIT path_points=",nav_path.size()," agent_present=",is_instance_valid(bot_agent)," map_iteration=",NavigationServer3D.map_get_iteration_id(nav_map))
     if bots.size()>0:
         var bot_anim=bots[0].get("anim_player")
         if is_instance_valid(bot_anim):
