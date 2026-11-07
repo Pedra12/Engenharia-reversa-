@@ -263,6 +263,9 @@ def main():
                 src=bundle_dir/kind
                 if src.is_dir():
                     shutil.copytree(src,original_assets/"bundle_assets"/bundle_dir.name/kind,dirs_exist_ok=True)
+    # Build a real skinned first-person UMP45 rig from the original bundle.
+    # This is separate from the older static OBJ reference used by the prototype.
+    subprocess.run([sys.executable,"tools/convert_bundle_weapon_rigs.py","--audit","unity_audit","--project",str(PROJECT)],check=True)
     combat_files=list(combat_assets.rglob("*"))
     required=[
         combat_assets/"meshes"/"sk_char_sold_male_01_7088991893364766669.obj",
