@@ -47,6 +47,8 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	navigation_agent.target_desired_distance = 1.25
 	navigation_agent.path_max_distance = 60.0
 	add_child(navigation_agent)
+	if is_instance_valid(combat) and combat.has_method("get_navigation_map"):
+		navigation_agent.navigation_map = combat.call("get_navigation_map")
 
 	var rig := rig_loader.create_rig(self, "sk_char_sold_male_01", false)
 	if rig.is_empty():
@@ -105,10 +107,19 @@ func _physics_process(delta: float) -> void:
 	var direct_direction := to_target.normalized() if distance > 0.01 else Vector3.ZERO
 	var movement_direction := direct_direction
 	if navigation_agent and is_instance_valid(navigation_agent):
-		if navigation_agent.target_position.distance_to(target.global_position) > 0.5:
-			navigation_agent.target_position = target.global_position
+		var nav_map: RID = navigation_agent.get_navigation_map()
+		var nav_target: Vector3 = target.global_position
+		if NavigationServer3D.map_get_iteration_id(nav_map) > 0:
+			var closest_target: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, target.global_position)
+			if closest_target != Vector3.ZERO:
+				nav_target = closest_target
+		if navigation_agent.target_position.distance_to(nav_target) > 0.5:
+			navigation_agent.target_position = nav_target
+		# get_next_path_position() must run every physics frame. It is what
+		# refreshes the NavigationAgent path state; gating it behind
+		# is_navigation_finished() can leave a newly assigned target path empty.
+		var next_path_position: Vector3 = navigation_agent.get_next_path_position()
 		if not navigation_agent.is_navigation_finished():
-			var next_path_position := navigation_agent.get_next_path_position()
 			var path_direction := next_path_position - global_position
 			path_direction.y = 0.0
 			if path_direction.length() > 0.15:
