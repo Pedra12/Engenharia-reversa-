@@ -131,6 +131,11 @@ func _create_navigation_region() -> void:
 	nav_mesh.agent_max_slope = float(settings.get("agent_slope", 60.0))
 	nav_mesh.agent_max_climb = float(settings.get("agent_climb", 0.5))
 	nav_mesh.cell_size = float(settings.get("cell_size", 0.09))
+	# Match the Godot navigation map rasterizer to Unity's original 0.09 m cell.
+	# The default Godot map cell size (0.25 m) merges the recovered Unity triangles incorrectly.
+	var nav_map: RID = get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(nav_map, nav_mesh.cell_size)
+	NavigationServer3D.map_set_merge_rasterizer_cell_scale(nav_map, 0.001)
 	var nav_vertices := PackedVector3Array()
 	for value in nav_data.get("vertices", []):
 		nav_vertices.append(Vector3(float(value[0]), float(value[1]), float(value[2])))
