@@ -361,9 +361,9 @@ func _build_hud() -> void:
 	radar = COMBAT_RADAR_SCRIPT.new()
 	radar.name = "OriginalStyleCombatRadar"
 	radar.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	radar.position = Vector2(237.0, 196.0)
-	radar.size = Vector2(310.32, 310.32)
-	radar.scale = Vector2.ONE * minf(get_viewport().get_visible_rect().size.x / 1920.0, get_viewport().get_visible_rect().size.y / 1080.0)
+	var radar_scale := minf(get_viewport().get_visible_rect().size.x / 1920.0, get_viewport().get_visible_rect().size.y / 1080.0)
+	radar.position = Vector2(237.0, 196.0) * radar_scale
+	radar.size = Vector2(310.32, 310.32) * radar_scale
 	hud.add_child(radar)
 	var screen := get_viewport().get_visible_rect().size
 	var ui_scale := minf(screen.x / 1920.0, screen.y / 1080.0)
