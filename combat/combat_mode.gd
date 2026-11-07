@@ -50,6 +50,8 @@ var dead_timer := 0.0
 var spawn_position := Vector3.ZERO
 var original_spawn_data: Dictionary = {}
 var used_spawn_positions: Array[Vector3] = []
+var navigation_region: NavigationRegion3D
+var original_offmesh_root: Node3D
 var grass_player: AudioStreamPlayer3D
 var jump_player: AudioStreamPlayer3D
 var reload_player: AudioStreamPlayer
@@ -61,6 +63,7 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	rng.randomize()
 	_prepare_assets()
 	_load_original_spawn_points()
+	_create_navigation_region()
 	_create_player()
 	_create_bots()
 	_build_hud()
@@ -110,6 +113,69 @@ func _load_original_spawn_points() -> void:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if typeof(parsed) == TYPE_DICTIONARY:
 		original_spawn_data = parsed
+
+func _create_navigation_region() -> void:
+	var path := "res://assets/combat_source/original_forest_navmesh.json"
+	if not FileAccess.file_exists(path):
+		push_warning("Original forest NavMesh data unavailable; bots will use direct movement.")
+		return
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_warning("Original forest NavMesh JSON could not be parsed.")
+		return
+	var nav_data: Dictionary = parsed
+	var settings: Dictionary = nav_data.get("settings", {})
+	var nav_mesh := NavigationMesh.new()
+	nav_mesh.agent_height = float(settings.get("agent_height", 2.0))
+	nav_mesh.agent_radius = float(settings.get("agent_radius", 0.4))
+	nav_mesh.agent_max_slope = float(settings.get("agent_slope", 60.0))
+	nav_mesh.agent_max_climb = float(settings.get("agent_climb", 0.5))
+	nav_mesh.cell_size = float(settings.get("cell_size", 0.09))
+	var nav_vertices := PackedVector3Array()
+	for value in nav_data.get("vertices", []):
+		nav_vertices.append(Vector3(float(value[0]), float(value[1]), float(value[2])))
+	nav_mesh.vertices = nav_vertices
+	var polygon_count := 0
+	for triangle in nav_data.get("triangles", []):
+		if triangle.size() == 3:
+			nav_mesh.add_polygon(PackedInt32Array([int(triangle[0]), int(triangle[1]), int(triangle[2])]))
+			polygon_count += 1
+	if polygon_count < 1000:
+		push_warning("Original forest NavMesh contains too few polygons: %d" % polygon_count)
+		return
+	navigation_region = NavigationRegion3D.new()
+	navigation_region.name = "OriginalForestNavigationRegion"
+	navigation_region.navigation_layers = 1
+	navigation_region.navigation_mesh = nav_mesh
+	map_root.add_child(navigation_region)
+
+	original_offmesh_root = Node3D.new()
+	original_offmesh_root.name = "OriginalForestOffMeshLinks"
+	map_root.add_child(original_offmesh_root)
+	var link_count := 0
+	var seen_links: Dictionary = {}
+	for link_data in nav_data.get("off_mesh_links", []):
+		var start_values: Array = link_data.get("start", [])
+		var end_values: Array = link_data.get("end", [])
+		if start_values.size() < 3 or end_values.size() < 3:
+			continue
+		var start_position := Vector3(float(start_values[0]), float(start_values[1]), float(start_values[2]))
+		var end_position := Vector3(float(end_values[0]), float(end_values[1]), float(end_values[2]))
+		var key := "%0.2f,%0.2f,%0.2f>%0.2f,%0.2f,%0.2f" % [start_position.x, start_position.y, start_position.z, end_position.x, end_position.y, end_position.z]
+		if seen_links.has(key):
+			continue
+		seen_links[key] = true
+		var link := NavigationLink3D.new()
+		link.name = "OriginalOffMeshLink_%04d" % link_count
+		link.start_position = start_position
+		link.end_position = end_position
+		link.bidirectional = int(link_data.get("direction", 0)) == 0
+		link.navigation_layers = 1
+		link.enter_cost = 1.0
+		link.travel_cost = 1.0
+		original_offmesh_root.add_child(link)
+		link_count += 1
+	print("ORIGINAL_FOREST_NAVMESH_READY vertices=", nav_vertices.size(), " polygons=", polygon_count, " offmesh_links=", link_count)
 
 func _get_original_spawn_positions(group: String) -> Array[Vector3]:
 	var result: Array[Vector3] = []
