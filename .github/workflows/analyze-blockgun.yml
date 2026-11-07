@@ -1,16 +1,27 @@
-name: Recursive Block Gun inventory
+name: Block Gun - Floresta combat build and asset audit
+
+concurrency:
+  group: blockgun-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/floresta-combate-mobile]
     paths:
       - ".github/workflows/analyze-blockgun.yml"
       - "tools/deep_inventory.py"
       - "tools/unity_asset_audit.py"
+      - "tools/unity_bundle_probe.py"
       - "tools/unity_scene_graph.py"
       - "tools/build_godot_preview.py"
       - "tools/build_godot_all_maps.py"
+      - "tools/convert_unity_rigs.py"
+      - "tools/convert_unity_animations.py"
+      - "tools/convert_bundle_weapon_rigs.py"
+      - "tools/extract_forest_spawn_points.py"
+      - "tools/extract_forest_navmesh.py"
       - "tools/map_quality_audit.py"
+      - "combat/**"
   workflow_dispatch:
 
 permissions:
@@ -19,12 +30,12 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
       - name: Prepare archive tools
         run: |
           sudo apt-get update
@@ -65,6 +76,37 @@ jobs:
       - name: Build relational Unity scene graph
         if: steps.extracted-cache.outputs.cache-hit != 'true'
         run: python3 tools/unity_scene_graph.py
+      - name: Probe original Unity Addressables bundles in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d unity_audit/bundle_candidates ]; then
+            python3 tools/unity_bundle_probe.py unity_audit/bundle_candidates unity_audit/bundle_probe
+          else
+            echo "No standalone Addressables bundle candidates were found."
+          fi
+      - name: Upload original combat extraction for rig and HUD reconstruction
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockGun-Original-Combat-Forensics
+          path: |
+            unity_audit/UNITY_SCENE_OBJECTS.json
+            unity_audit/UNITY_SKINNING_DATA.json
+            unity_audit/UNITY_RIG_HIERARCHY.json
+            unity_audit/UNITY_HUD_LAYOUT.json
+            unity_audit/UNITY_ANIMATION_DATA.json
+            unity_audit/UNITY_ANIMATOR_DATA.json
+            unity_audit/UNITY_OBJECT_CATALOG.csv
+            unity_audit/UNITY_MATERIAL_PROPERTIES.json
+            unity_audit/ARCHIVE_BUNDLE_CANDIDATES.csv
+            unity_audit/bundle_probe/
+            unity_audit/exported/meshes/*_Mesh_sk_char_sold_male_01.obj
+            unity_audit/exported/meshes/*_Mesh_sk_bomb_fp.obj
+            unity_audit/exported/meshes/*_Mesh_sk_gloves.obj
+            unity_audit/exported/audio/
+            unity_audit/exported/textures/
+          if-no-files-found: error
+          retention-days: 30
       - name: Install image library for map icon generation
         run: python3 -m pip install --disable-pip-version-check Pillow
       - name: Generate Godot project with all recovered maps
@@ -111,6 +153,24 @@ jobs:
           grep -q "BLOCKGUN_BOOT_OK" /tmp/godot-runtime.log
           grep -q "MAP_LOADED lvl_forest" /tmp/godot-runtime.log
           echo "Startup and default map load verified."
+      - name: Validate combat scene, recovered character, weapon and bots
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project -- --audit-combat 2>&1 | tee /tmp/combat-audit.log
+          COMBAT_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$COMBAT_STATUS" -ne 0 ]; then
+            echo "Floresta combat runtime audit failed."
+            exit "$COMBAT_STATUS"
+          fi
+          if grep -Eq "SCRIPT ERROR:|Parse Error:|Failed to load script|Failed loading resource" /tmp/combat-audit.log; then
+            echo "Combat runtime reported a script or asset error."
+            exit 1
+          fi
+          grep -q "BLOCKGUN_COMBAT_AUDIT_OK" /tmp/combat-audit.log
+          echo "Combat player and bots loaded from recovered assets."
           set +e
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path godot_project -- --audit-all-maps 2>&1 | tee /tmp/map-audit.log
           MAP_AUDIT_STATUS=${PIPESTATUS[0]}
@@ -169,7 +229,7 @@ jobs:
           android/android_sdk_path = "$ANDROID_HOME"
           android/java_sdk_path = "$JAVA_HOME"
           EOF
-      - name: Export Android preview APK
+      - name: Export Android Floresta combat APK
         shell: bash
         run: |
           set -euo pipefail
@@ -178,18 +238,18 @@ jobs:
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
           export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
           export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
-          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunMapsPreview.apk" 2>&1 | tee /tmp/android-export.log
+          /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --verbose --path godot_project --export-debug Android "$GITHUB_WORKSPACE/godot_project/build/BlockGunFlorestaCombat.apk" 2>&1 | tee /tmp/android-export.log
           if grep -Eq "No project icon specified|Failed loading resource|SCRIPT ERROR:|Parse Error:" /tmp/android-export.log; then
             echo "Android export reported a fatal resource or icon warning."
             exit 1
           fi
-          test -s godot_project/build/BlockGunMapsPreview.apk
-          ls -lh godot_project/build/BlockGunMapsPreview.apk
+          test -s godot_project/build/BlockGunFlorestaCombat.apk
+          ls -lh godot_project/build/BlockGunFlorestaCombat.apk
       - name: Upload Android preview APK
         uses: actions/upload-artifact@v4
         with:
-          name: BlockGun-Android-Preview-APK
-          path: godot_project/build/BlockGunMapsPreview.apk
+          name: BlockGun-Floresta-Combat-APK
+          path: godot_project/build/BlockGunFlorestaCombat.apk
           if-no-files-found: error
           retention-days: 30
       - name: Publish summary
@@ -202,13 +262,13 @@ jobs:
             const content = Buffer.from(fs.readFileSync(path)).toString('base64');
             let sha;
             try {
-              const existing = await github.rest.repos.getContent({owner: context.repo.owner, repo: context.repo.repo, path: 'BLOCKGUN_DEEP_INVENTORY.md', ref: 'main'});
+              const existing = await github.rest.repos.getContent({owner: context.repo.owner, repo: context.repo.repo, path: 'BLOCKGUN_DEEP_INVENTORY.md', ref: context.refName});
               sha = existing.data.sha;
             } catch (e) {}
             await github.rest.repos.createOrUpdateFileContents({
               owner: context.repo.owner, repo: context.repo.repo, path: 'BLOCKGUN_DEEP_INVENTORY.md',
               message: 'Publish recursive inventory of Block Gun archive',
-              content, ...(sha ? {sha} : {}), branch: 'main'
+              content, ...(sha ? {sha} : {}), branch: context.refName
             });
       - name: Upload full inventories
         uses: actions/upload-artifact@v4
