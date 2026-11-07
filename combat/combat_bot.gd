@@ -86,7 +86,7 @@ func _physics_process(delta: float) -> void:
 	to_target.y = 0.0
 	var distance := to_target.length()
 	if distance > 0.01:
-		var facing := atan2(-to_target.x, -to_target.z) + PI # Unity original soldier faces +Z; Godot model forward is -Z.
+		var facing := atan2(-to_target.x, -to_target.z) # Convert target direction to Godot's -Z model-forward convention.
 		rotation.y = lerp_angle(rotation.y, facing, delta * 5.0)
 	var direct_direction := to_target.normalized() if distance > 0.01 else Vector3.ZERO
 	var movement_direction := direct_direction
@@ -133,13 +133,24 @@ func _physics_process(delta: float) -> void:
 		if locomotion != current_locomotion:
 			current_locomotion = locomotion
 			anim_player.play(locomotion, 0.16, 1.0, true)
-	if distance < 24.0 and shoot_cooldown <= 0.0 and is_instance_valid(combat):
+	if distance < 24.0 and shoot_cooldown <= 0.0 and is_instance_valid(combat) and _has_clear_shot():
 		shoot_cooldown = 1.15
 		shoot_animation_timer = 0.32
 		current_locomotion = ""
 		if anim_player and anim_player.has_clip("Fire"):
 			anim_player.play("Fire", 0.06, 1.0, false)
 		combat.call("bot_shoot", self)
+
+func _has_clear_shot() -> bool:
+	if not is_instance_valid(target):
+		return false
+	var from := global_position + Vector3.UP * 1.35
+	var to := target.global_position + Vector3.UP * 1.1
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 3
+	query.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider == target
 
 func take_damage(amount: float, headshot: bool = false) -> bool:
 	if dead:
