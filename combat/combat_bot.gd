@@ -47,8 +47,13 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	navigation_agent.target_desired_distance = 1.25
 	navigation_agent.path_max_distance = 60.0
 	add_child(navigation_agent)
-	# NavigationAgent3D inherits the active World3D navigation map automatically.
-	# Godot 4.4 exposes the map as a read-only RID; assigning navigation_map is invalid.
+	# Bind the agent to the exact recovered forest map. The world may contain
+	# more than one navigation map, so relying on the default map can produce
+	# an empty agent path even while NavigationServer3D can find a route.
+	if is_instance_valid(combat) and combat.has_method("get_navigation_map"):
+		var forest_map: RID = combat.call("get_navigation_map")
+		if forest_map.is_valid():
+			navigation_agent.set_navigation_map(forest_map)
 
 	var rig := rig_loader.create_rig(self, "sk_char_sold_male_01", false)
 	if rig.is_empty():
