@@ -205,6 +205,11 @@ func _create_navigation_region() -> void:
 		link_count += 1
 	print("ORIGINAL_FOREST_NAVMESH_READY vertices=", nav_vertices.size(), " polygons=", polygon_count, " offmesh_links=", link_count)
 
+func get_navigation_map() -> RID:
+	if is_instance_valid(navigation_region):
+		return navigation_region.get_navigation_map()
+	return get_world_3d().navigation_map
+
 func _get_original_spawn_positions(group: String) -> Array[Vector3]:
 	var result: Array[Vector3] = []
 	var groups: Dictionary = original_spawn_data.get("spawn_groups", {})
