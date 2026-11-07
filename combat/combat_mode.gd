@@ -791,7 +791,7 @@ func _auto_fire_target_visible() -> bool:
 	query.collision_mask = 5
 	query.exclude = [player.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	return not hit.is_empty() and hit.collider is Node and hit.collider.has_method("take_damage")
+	return not hit.is_empty() and hit.collider is Node and hit.collider.has_method("take_damage") and int(hit.collider.get("team_id")) == 1
 
 func _fire() -> void:
 	if fire_cooldown > 0.0 or reload_timer > 0.0 or dead_timer > 0.0:
@@ -825,7 +825,7 @@ func _fire() -> void:
 		if hit.is_empty():
 			continue
 		var target = hit.collider
-		if not target or not target.has_method("take_damage"):
+		if not target or not target.has_method("take_damage") or int(target.get("team_id")) != 1:
 			continue
 		var relative_height: float = hit.position.y - target.global_position.y
 		var headshot := relative_height > 1.42
