@@ -29,6 +29,7 @@ var ammo_label: Label
 var kills_label: Label
 var status_label: Label
 var hit_label: Label
+var pause_button: Button
 var joystick_bg: Panel
 var joystick_knob: Panel
 var move_vector := Vector2.ZERO
@@ -326,6 +327,7 @@ func _create_bots() -> void:
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 30
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
 	hud = Control.new()
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -345,6 +347,14 @@ func _build_hud() -> void:
 	hit_label = _new_label(hud, "+28", Vector2.ZERO, 30)
 	hit_label.visible = false
 	hit_label.set_anchors_preset(Control.PRESET_CENTER)
+	pause_button = Button.new()
+	pause_button.text = "Ⅱ"
+	pause_button.position = Vector2(50.0, 50.0)
+	pause_button.size = Vector2(65.0, 65.0)
+	pause_button.add_theme_font_size_override("font_size", 26)
+	pause_button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0))
+	pause_button.pressed.connect(_toggle_pause)
+	hud.add_child(pause_button)
 	var screen := get_viewport().get_visible_rect().size
 	var ui_scale := minf(screen.x / 1920.0, screen.y / 1080.0)
 	# Positions and sizes recovered from WindowPlayer/Content/MobileCanvas in Unity.
@@ -707,6 +717,7 @@ func _update_hud() -> void:
 		kills_label.text = "ELIMINAÇÕES %d" % kills
 
 func shutdown() -> void:
+	get_tree().paused = false
 	if is_instance_valid(player):
 		player.queue_free()
 	if is_instance_valid(map_root):
@@ -714,6 +725,14 @@ func shutdown() -> void:
 			bot.queue_free()
 	if is_instance_valid(camera):
 		camera.current = false
+
+func _toggle_pause() -> void:
+	var paused := not get_tree().paused
+	get_tree().paused = paused
+	if is_instance_valid(pause_button):
+		pause_button.text = "▶" if paused else "Ⅱ"
+	if is_instance_valid(status_label):
+		status_label.text = "PAUSADO" if paused else "BATALHA EM FLORESTA"
 
 func _exit_combat() -> void:
 	if return_callback.is_valid():
