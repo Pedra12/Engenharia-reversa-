@@ -186,7 +186,10 @@ func _create_audio() -> void:
 	jump_player.volume_db = -8.0
 	player.add_child(jump_player)
 	reload_player = AudioStreamPlayer.new()
-	reload_player.stream = load(RELOAD_VOICE_PATH)
+	if ResourceLoader.exists(RELOAD_VOICE_PATH):
+		reload_player.stream = load(RELOAD_VOICE_PATH)
+	else:
+		push_warning("Reload voice asset unavailable; continuing without reload voice: " + RELOAD_VOICE_PATH)
 	reload_player.volume_db = -9.0
 	add_child(reload_player)
 
