@@ -8,7 +8,7 @@ const SOLDIER_TEXTURE_PATH = "res://assets/combat_source/textures/SimpleMilitary
 const UMP_TEXTURE_PATH = "res://assets/combat_source/textures/UMP_45_Diffuse_-7805003812694618604.png"
 const GRASS_STEP_PATH = "res://assets/combat_source/audio/footstep_grass_0_1_footstep_grass_0.wav"
 const JUMP_SOUND_PATH = "res://assets/combat_source/audio/Jump_1_Jump.wav"
-const RELOAD_VOICE_PATH = "res://assets/combat_source/audio/VO_i_need_to_reload_0_-1743279502966138324_VO_i_need_to_reload_0.wav"
+const RELOAD_VOICE_PATH = "res://assets/unity_original/bundle_assets/Android_blockgun1_assets_all_9b49dc55ce850c62b2c9e2e3b2f8f691.bundle/audio/AudioClip_VO_i_need_to_reload_0_5496395648634470501_VO_i_need_to_reload_0.wav.wav"
 
 var map_root: Node3D
 var return_callback: Callable
@@ -44,6 +44,7 @@ var fire_cooldown := 0.0
 var reload_timer := 0.0
 var footstep_timer := 0.0
 var aiming := false
+var crouching := false
 var fire_left_held := false
 var fire_right_held := false
 var dead_timer := 0.0
@@ -387,8 +388,6 @@ func _build_hud() -> void:
 	_make_button("PULAR", Vector2(-191.5, -423.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _jump, true)
 	_make_button("RECARREGAR", Vector2(-562.5, -419.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _reload, true, reload_icon)
 	_make_button("AGACHAR", Vector2(-422.5, -193.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_crouch, true)
-	_make_button("EXPLOSIVO", Vector2(-538.5, -707.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _throw_explosive, true)
-	_make_button("TÁTICO", Vector2(-373.5, -773.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _use_tactical, true)
 	_make_button("SAIR", Vector2(18.0, -82.0) * ui_scale, Vector2(88.0, 54.0) * ui_scale, _exit_combat, false)
 	var crosshair := Label.new()
 	crosshair.text = "＋"
@@ -558,7 +557,7 @@ func _physics_process(delta: float) -> void:
 	var forward = Vector3(-sin(look_yaw), 0.0, -cos(look_yaw))
 	var right = Vector3(cos(look_yaw), 0.0, -sin(look_yaw))
 	var direction = (right * input_dir.x + forward * input_dir.y).normalized()
-	var speed = 3.0 if aiming else 5.0
+	var speed = (1.7 if crouching else 3.0) if aiming else (2.6 if crouching else 5.0)
 	player.velocity.x = direction.x * speed
 	player.velocity.z = direction.z * speed
 	player.move_and_slide()
@@ -678,6 +677,19 @@ func _toggle_aim() -> void:
 	aiming = not aiming
 	camera.fov = 54.0 if aiming else 70.0
 	status_label.text = "MIRA ATIVADA" if aiming else "MODO DE DISPARO"
+
+func _toggle_crouch() -> void:
+	if dead_timer > 0.0 or not is_instance_valid(player):
+		return
+	crouching = not crouching
+	var collision := player.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if collision and collision.shape is CapsuleShape3D:
+		var capsule := collision.shape as CapsuleShape3D
+		capsule.height = 1.15 if crouching else 1.8
+		collision.position.y = capsule.height * 0.5
+	if is_instance_valid(camera_pivot):
+		camera_pivot.position.y = 1.02 if crouching else 1.58
+	status_label.text = "AGACHADO" if crouching else "EM PÉ"
 
 func _jump() -> void:
 	if player.is_on_floor() and dead_timer <= 0.0:
