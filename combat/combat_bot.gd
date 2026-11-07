@@ -112,7 +112,22 @@ func _physics_process(delta: float) -> void:
 	velocity.y -= 18.0 * delta
 	move_and_slide()
 	if anim_player and shoot_animation_timer <= 0.0:
-		var locomotion := "front_run" if direction.length() > 0.7 else ("front_walk" if direction.length() > 0.25 else "Rifle_Idle_gun_down")
+		var locomotion := "Rifle_Idle_gun_down"
+		if direction.length() > 0.25:
+			var move_direction := direction.normalized()
+			var forward_alignment := move_direction.dot(direct_direction)
+			var lateral_alignment := move_direction.dot(global_transform.basis.x)
+			if forward_alignment < -0.45:
+				locomotion = "back_run" if direction.length() > 0.7 else "back_cwalk"
+			elif absf(lateral_alignment) > 0.45:
+				if lateral_alignment > 0.0:
+					locomotion = "right_run" if direction.length() > 0.7 else "right_walk"
+				else:
+					locomotion = "left_run" if direction.length() > 0.7 else "left_walk"
+			else:
+				locomotion = "front_run" if direction.length() > 0.7 else "front_walk"
+		if not anim_player.has_clip(locomotion):
+			locomotion = "front_run" if direction.length() > 0.7 else ("front_walk" if direction.length() > 0.25 else "Idle")
 		if not anim_player.has_clip(locomotion):
 			locomotion = "Idle"
 		if locomotion != current_locomotion:
