@@ -509,18 +509,18 @@ func _set_fire_button(side: String, pressed: bool) -> void:
 	else:
 		fire_right_held = pressed
 
-func _unhandled_input(event: InputEvent) -> void:
+# Capture touch input before GUI Buttons consume it. The previous _unhandled_input
+# lost joystick/look touches whenever a Control accepted the event.
+func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
-		var screen = get_viewport().get_visible_rect().size
+		var screen := get_viewport().get_visible_rect().size
 		if event.pressed:
-			# Original Unity HUD: dynamic joystick on the entire left half,
-			# TrackPad camera look on the entire right half.
 			if event.position.x < screen.x * 0.5 and move_touch_id == -1:
 				move_touch_id = event.index
 				joystick_bg.position = event.position - joystick_bg.size * 0.5
 				joystick_knob.position = (joystick_bg.size - joystick_knob.size) * 0.5
 				_update_joystick(event.position)
-			elif event.position.x >= screen.x * 0.5 and look_touch_id == -1:
+			elif event.position.x >= screen.x * 0.5 and look_touch_id == -1 and not _touch_over_hud_button(event.position):
 				look_touch_id = event.index
 		else:
 			if event.index == move_touch_id:
@@ -537,6 +537,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_apply_look(event.relative)
 	elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_apply_look(event.relative)
+
+func _touch_over_hud_button(point: Vector2) -> bool:
+	if not is_instance_valid(hud):
+		return false
+	for control in hud.get_children():
+		if control is Control and control is Button and control.visible and control.get_global_rect().has_point(point):
+			return true
+	return false
 
 func _update_joystick(position: Vector2) -> void:
 	var center := joystick_bg.get_global_rect().get_center()
