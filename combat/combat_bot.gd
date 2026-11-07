@@ -70,7 +70,7 @@ func _physics_process(delta: float) -> void:
 	to_target.y = 0.0
 	var distance := to_target.length()
 	if distance > 0.01:
-		var facing := atan2(-to_target.x, -to_target.z)
+		var facing := atan2(-to_target.x, -to_target.z) + PI # Unity original soldier faces +Z; Godot model forward is -Z.
 		rotation.y = lerp_angle(rotation.y, facing, delta * 5.0)
 	var direction := Vector3.ZERO
 	if distance > 9.0:
