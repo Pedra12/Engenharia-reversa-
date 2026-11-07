@@ -3,6 +3,7 @@ extends Node3D
 const BOT_SCRIPT = preload("res://combat/combat_bot.gd")
 const RIG_LOADER_SCRIPT = preload("res://combat/original_rig_loader.gd")
 const WEAPON_ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_weapon_animation_player.gd")
+const COMBAT_RADAR_SCRIPT = preload("res://combat/combat_radar.gd")
 const UMP_MESH_PATH = "res://assets/combat_source/meshes/UMP_45_2.obj"
 const SOLDIER_TEXTURE_PATH = "res://assets/combat_source/textures/SimpleMilitary_Soldier01_Black_-6561600483854028127.png"
 const UMP_TEXTURE_PATH = "res://assets/combat_source/textures/UMP_45_Diffuse_-7805003812694618604.png"
@@ -30,6 +31,7 @@ var kills_label: Label
 var status_label: Label
 var hit_label: Label
 var pause_button: Button
+var radar: Control
 var joystick_bg: Panel
 var joystick_knob: Panel
 var move_vector := Vector2.ZERO
@@ -355,6 +357,14 @@ func _build_hud() -> void:
 	pause_button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0))
 	pause_button.pressed.connect(_toggle_pause)
 	hud.add_child(pause_button)
+	# Recovered from WindowPlayer/Content/MobileCanvas/ContentsOther/Advanced_FPS_Radar01.
+	radar = COMBAT_RADAR_SCRIPT.new()
+	radar.name = "OriginalStyleCombatRadar"
+	radar.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	radar.position = Vector2(237.0, 196.0)
+	radar.size = Vector2(310.32, 310.32)
+	radar.scale = Vector2.ONE * minf(get_viewport().get_visible_rect().size.x / 1920.0, get_viewport().get_visible_rect().size.y / 1080.0)
+	hud.add_child(radar)
 	var screen := get_viewport().get_visible_rect().size
 	var ui_scale := minf(screen.x / 1920.0, screen.y / 1080.0)
 	# Positions and sizes recovered from WindowPlayer/Content/MobileCanvas in Unity.
@@ -536,6 +546,8 @@ func _apply_look(relative: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
+	if is_instance_valid(radar):
+		radar.call("update_radar", player, map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false))
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
 	if (fire_left_held or fire_right_held) and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
 		_fire()
