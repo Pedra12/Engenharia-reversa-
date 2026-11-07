@@ -130,8 +130,9 @@ func _choose_spawn_position(candidates: Array[Vector3], used: Array[Vector3]) ->
 		if used.is_empty():
 			minimum_distance = rng.randf()
 		else:
+			var candidate_2d := Vector2(candidate.x, candidate.z)
 			for occupied in used:
-				minimum_distance = minf(minimum_distance, candidate.distance_to(occupied))
+				minimum_distance = minf(minimum_distance, candidate_2d.distance_to(Vector2(occupied.x, occupied.z)))
 		if minimum_distance > best_distance:
 			best_distance = minimum_distance
 			best = candidate
@@ -235,7 +236,7 @@ func _create_bots() -> void:
 	var candidates := _get_original_spawn_positions("generic")
 	var fallback_offsets := [Vector3(10, 0, 4), Vector3(-12, 0, -5), Vector3(5, 0, -15)]
 	for index in range(3):
-		var guess := _choose_spawn_position(candidates, used_spawn_positions) if not candidates.is_empty() else spawn_position + fallback_offsets[index]
+		var guess: Vector3 = _choose_spawn_position(candidates, used_spawn_positions) if not candidates.is_empty() else spawn_position + fallback_offsets[index]
 		var floor_hit := _find_floor(guess, 8.0)
 		if floor_hit.is_empty():
 			floor_hit = _find_floor(spawn_position + fallback_offsets[index], 10.0)
