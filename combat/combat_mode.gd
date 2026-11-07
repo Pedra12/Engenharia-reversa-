@@ -34,6 +34,7 @@ var pause_button: Button
 var radar: Control
 var joystick_bg: Panel
 var joystick_knob: Panel
+var joystick_home_position := Vector2.ZERO
 var move_vector := Vector2.ZERO
 var move_touch_id := -1
 var look_touch_id := -1
@@ -369,9 +370,12 @@ func _build_hud() -> void:
 	var ui_scale := minf(screen.x / 1920.0, screen.y / 1080.0)
 	# Positions and sizes recovered from WindowPlayer/Content/MobileCanvas in Unity.
 	joystick_bg = Panel.new()
-	joystick_bg.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	joystick_bg.position = Vector2(167.0, -300.0) * ui_scale
+	# The original Joystick-DynamicRegion covers the full left half. The visual base
+	# starts at the recovered default location and moves to the initial touch point.
+	joystick_bg.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	joystick_bg.position = Vector2(167.0 * ui_scale, screen.y - 300.0 * ui_scale)
 	joystick_bg.size = Vector2(250.0, 250.0) * ui_scale
+	joystick_home_position = joystick_bg.position
 	joystick_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_panel(joystick_bg, Color(0.08, 0.12, 0.16, 0.28), 125)
 	hud.add_child(joystick_bg)
@@ -508,15 +512,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var screen = get_viewport().get_visible_rect().size
 		if event.pressed:
-			if event.position.x < screen.x * 0.42 and event.position.y > screen.y * 0.48 and move_touch_id == -1:
+			# Original Unity HUD: dynamic joystick on the entire left half,
+			# TrackPad camera look on the entire right half.
+			if event.position.x < screen.x * 0.5 and move_touch_id == -1:
 				move_touch_id = event.index
+				joystick_bg.position = event.position - joystick_bg.size * 0.5
+				joystick_knob.position = (joystick_bg.size - joystick_knob.size) * 0.5
 				_update_joystick(event.position)
-			elif event.position.x >= screen.x * 0.42 and event.position.y < screen.y - 250 and look_touch_id == -1:
+			elif event.position.x >= screen.x * 0.5 and look_touch_id == -1:
 				look_touch_id = event.index
 		else:
 			if event.index == move_touch_id:
 				move_touch_id = -1
 				move_vector = Vector2.ZERO
+				joystick_bg.position = joystick_home_position
 				joystick_knob.position = (joystick_bg.size - joystick_knob.size) * 0.5
 			if event.index == look_touch_id:
 				look_touch_id = -1
