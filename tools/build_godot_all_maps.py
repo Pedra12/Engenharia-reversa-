@@ -698,6 +698,13 @@ func _run_combat_audit():
     var combat_player=combat_session.get("player") if is_instance_valid(combat_session) else null
     var combat_weapon=combat_session.get("weapon_mesh") if is_instance_valid(combat_session) else null
     var bots=world.find_children("BotSoldier_*","CharacterBody3D",true,false) if is_instance_valid(world) else []
+    var navigation_ok=false
+    var nav_region=combat_session.get("navigation_region") if is_instance_valid(combat_session) else null
+    if is_instance_valid(nav_region) and is_instance_valid(combat_player) and bots.size()>0:
+        var nav_map=nav_region.get_navigation_map()
+        var nav_path=NavigationServer3D.map_get_path(nav_map,combat_player.global_position,bots[0].global_position,true,1)
+        navigation_ok=nav_path.size()>=2
+        print("BLOCKGUN_NAVIGATION_AUDIT path_points=",nav_path.size()," map_iteration=",NavigationServer3D.map_get_iteration_id(nav_map))
     var soldier_mesh_ok=false
     var soldier_texture_ok=false
     if bots.size()>0:
@@ -714,11 +721,11 @@ func _run_combat_audit():
     var weapon_mesh_ok=is_instance_valid(combat_weapon) and combat_weapon.mesh is Mesh
     var weapon_material_check=combat_session.get("weapon_material") if is_instance_valid(combat_session) else null
     var weapon_texture_ok=weapon_material_check is BaseMaterial3D and weapon_material_check.albedo_texture is Texture2D
-    if is_instance_valid(combat_player) and bot_count>0 and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
-        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
+    if is_instance_valid(combat_player) and bot_count>0 and navigation_ok and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
+        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," navigation=",navigation_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(0)
     else:
-        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
+        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count," navigation=",navigation_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(1)
 func _show_home():
     _stop_walk_mode()
