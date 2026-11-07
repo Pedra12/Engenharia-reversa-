@@ -111,24 +111,28 @@ func _physics_process(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, facing, delta * 5.0)
 	var direct_direction := to_target.normalized() if distance > 0.01 else Vector3.ZERO
 	var movement_direction := direct_direction
+	# Query the recovered forest navigation map directly. NavigationAgent3D can
+	# temporarily report an empty path when a CharacterBody is spawned slightly
+	# above/off the baked polygons; the server path remains authoritative.
+	var nav_map: RID = combat.call("get_navigation_map") if combat.has_method("get_navigation_map") else get_world_3d().navigation_map
+	if nav_map.is_valid() and NavigationServer3D.map_get_iteration_id(nav_map) > 0:
+		var nav_start: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, global_position)
+		var nav_end: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, target.global_position)
+		if nav_start.distance_to(nav_end) > 0.75:
+			var server_path: PackedVector3Array = NavigationServer3D.map_get_path(nav_map, nav_start, nav_end, true, 1)
+			if server_path.size() > 1:
+				var waypoint_index := 1
+				while waypoint_index < server_path.size() - 1 and global_position.distance_to(server_path[waypoint_index]) < 0.65:
+					waypoint_index += 1
+				var path_direction := server_path[waypoint_index] - global_position
+				path_direction.y = 0.0
+				if path_direction.length() > 0.15:
+					movement_direction = path_direction.normalized()
 	if navigation_agent and is_instance_valid(navigation_agent):
-		var nav_map: RID = navigation_agent.get_navigation_map()
-		var nav_target: Vector3 = target.global_position
-		if NavigationServer3D.map_get_iteration_id(nav_map) > 0:
-			var closest_target: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, target.global_position)
-			if closest_target != Vector3.ZERO:
-				nav_target = closest_target
+		var nav_target: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, target.global_position) if nav_map.is_valid() else target.global_position
 		if navigation_agent.target_position.distance_to(nav_target) > 0.5:
 			navigation_agent.target_position = nav_target
-		# get_next_path_position() must run every physics frame. It is what
-		# refreshes the NavigationAgent path state; gating it behind
-		# is_navigation_finished() can leave a newly assigned target path empty.
-		var next_path_position: Vector3 = navigation_agent.get_next_path_position()
-		if not navigation_agent.is_navigation_finished():
-			var path_direction := next_path_position - global_position
-			path_direction.y = 0.0
-			if path_direction.length() > 0.15:
-				movement_direction = path_direction.normalized()
+		navigation_agent.get_next_path_position()
 	var direction := Vector3.ZERO
 	if distance > 9.0:
 		direction = movement_direction
