@@ -241,12 +241,13 @@ func _create_player() -> void:
 	player.collision_layer = 2
 	player.collision_mask = 1
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.34
+	capsule.radius = 0.4
 	capsule.height = 1.8
 	var collision := CollisionShape3D.new()
 	collision.shape = capsule
 	collision.position.y = 0.9
 	player.add_child(collision)
+	player.floor_snap_length = 0.3
 	map_root.add_child(player)
 	var center := _map_center()
 	var original_points := _get_original_spawn_positions("generic")
@@ -268,6 +269,7 @@ func _create_player() -> void:
 	camera = Camera3D.new()
 	camera.position = Vector3.ZERO
 	camera.fov = 70.0
+	camera.near = 0.05
 	camera.current = true
 	camera_pivot.add_child(camera)
 	weapon_mount = Node3D.new()
@@ -287,7 +289,23 @@ func _create_player() -> void:
 		weapon_animation_player.sound_event.connect(_on_weapon_sound_event)
 		weapon_animation_player.clip_finished.connect(_on_weapon_clip_finished)
 		weapon_animation_player.play("Deploy", 1.0, false)
+		var fp_weapon: MeshInstance3D = player_fp_rig.get("meshes", {}).get("weapon")
+		if fp_weapon and fp_weapon.mesh:
+			print("FP_WEAPON_AABB name=", fp_weapon.name, " aabb=", fp_weapon.mesh.get_aabb(), " global_transform=", fp_weapon.global_transform)
 	_create_audio()
+	call_deferred("_diagnose_player_floor")
+
+func _diagnose_player_floor() -> void:
+	await get_tree().physics_frame
+	if not is_instance_valid(player):
+		return
+	var ray_start := player.global_position + Vector3.UP * 0.35
+	var ray_end := player.global_position - Vector3.UP * 1.25
+	var query := PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.collision_mask = 1
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var floor_name := String(hit.collider.name) if not hit.is_empty() and hit.collider else "NONE"
+	print("PLAYER_FLOOR_DIAGNOSTIC position=", player.global_position, " is_on_floor=", player.is_on_floor(), " layer=", player.collision_layer, " mask=", player.collision_mask, " ray_body=", floor_name, " ray_point=", hit.get("position", Vector3.ZERO))
 
 func _create_audio() -> void:
 	grass_player = AudioStreamPlayer3D.new()
@@ -414,13 +432,21 @@ func _build_hud() -> void:
 	_make_button("RECARREGAR", Vector2(-562.5, -419.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _reload, true, reload_icon)
 	_make_button("AGACHAR", Vector2(-422.5, -193.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_crouch, true)
 	_make_button("SAIR", Vector2(18.0, 116.0) * ui_scale, Vector2(88.0, 54.0) * ui_scale, _exit_combat, false)
-	var crosshair := Label.new()
-	crosshair.text = "＋"
+	# Four independent thin bars keep the aim point truly centered at any aspect ratio.
+	var crosshair := Control.new()
+	crosshair.name = "CenterCrosshair"
 	crosshair.set_anchors_preset(Control.PRESET_CENTER)
-	crosshair.position = Vector2(-12, -22)
-	crosshair.add_theme_font_size_override("font_size", 32)
-	crosshair.add_theme_color_override("font_color", Color(0.9, 1.0, 0.94, 0.9))
+	crosshair.position = Vector2(-9.0, -9.0)
+	crosshair.size = Vector2(18.0, 18.0)
+	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(crosshair)
+	for bar_data in [Vector4(8, 0, 2, 6), Vector4(8, 12, 2, 6), Vector4(0, 8, 6, 2), Vector4(12, 8, 6, 2)]:
+		var bar := ColorRect.new()
+		bar.position = Vector2(bar_data.x, bar_data.y)
+		bar.size = Vector2(bar_data.z, bar_data.w)
+		bar.color = Color(0.9, 1.0, 0.94, 0.9)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		crosshair.add_child(bar)
 
 func _style_panel(panel: Panel, color: Color, radius: int) -> void:
 	var style := StyleBoxFlat.new()
