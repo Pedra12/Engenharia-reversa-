@@ -884,13 +884,21 @@ func _show_damage(amount: int, headshot: bool) -> void:
 	tween.tween_callback(func(): hit_label.visible = false)
 
 func get_best_target(source: CharacterBody3D, source_team: int) -> CharacterBody3D:
-	var best: CharacterBody3D
-	var best_distance := INF
+	var best_visible: CharacterBody3D
+	var best_any: CharacterBody3D
+	var best_visible_distance := INF
+	var best_any_distance := INF
+	# Always acquire an opposing unit. Line of sight controls shooting, not
+	# target acquisition; otherwise teams can remain idle forever behind trees
+	# or terrain with no navigation goal to approach.
 	if source_team != 0 and dead_timer <= 0.0 and is_instance_valid(player) and player.visible:
 		var player_distance := source.global_position.distance_to(player.global_position)
-		if player_distance < 55.0 and _has_line_of_sight(source, player) and player_distance < best_distance:
-			best = player
-			best_distance = player_distance
+		if player_distance < 90.0:
+			best_any = player
+			best_any_distance = player_distance
+			if _has_line_of_sight(source, player):
+				best_visible = player
+				best_visible_distance = player_distance
 	for candidate in map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false):
 		if candidate == source or not is_instance_valid(candidate) or candidate.get("dead") == true:
 			continue
@@ -898,10 +906,15 @@ func get_best_target(source: CharacterBody3D, source_team: int) -> CharacterBody
 		if candidate_team == source_team:
 			continue
 		var distance := source.global_position.distance_to(candidate.global_position)
-		if distance < 55.0 and distance < best_distance and _has_line_of_sight(source, candidate):
-			best = candidate
-			best_distance = distance
-	return best
+		if distance >= 90.0:
+			continue
+		if distance < best_any_distance:
+			best_any = candidate
+			best_any_distance = distance
+		if distance < best_visible_distance and _has_line_of_sight(source, candidate):
+			best_visible = candidate
+			best_visible_distance = distance
+	return best_visible if is_instance_valid(best_visible) else best_any
 
 func _has_line_of_sight(source: Node3D, target: Node3D) -> bool:
 	var from := source.global_position + Vector3.UP * 1.35
