@@ -57,6 +57,9 @@ var kills := 0
 var allied_kills := 0
 var enemy_kills := 0
 var match_finished := false
+var pickup_areas: Array[Area3D] = []
+var pickup_respawn_timers: Array[float] = []
+var pickup_types: Array[int] = []
 var fire_cooldown := 0.0
 var reload_timer := 0.0
 var footstep_timer := 0.0
@@ -85,6 +88,7 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	_create_navigation_region()
 	_create_player()
 	_create_bots()
+	_create_pickups()
 	_build_hud()
 	print("COMBAT_MODE_READY map=Floresta allies=2 enemies=4 weapon=UMP45")
 
@@ -361,6 +365,89 @@ func _create_bots() -> void:
 		bot.call("configure", player, self, rig_loader, load(UMP_MESH_PATH), weapon_material, assigned_team)
 	print("COMBAT_BOTS_SPAWNED count=", map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false).size(), " original_generic_spawns=", candidates.size())
 
+func _create_pickups() -> void:
+	pickup_areas.clear()
+	pickup_respawn_timers.clear()
+	pickup_types.clear()
+	for index in range(8):
+		var pickup := Area3D.new()
+		pickup.name = "ForestPickup_%02d" % (index + 1)
+		pickup.collision_layer = 8
+		pickup.collision_mask = 2
+		pickup.monitoring = true
+		var collision := CollisionShape3D.new()
+		var sphere := SphereShape3D.new()
+		sphere.radius = 1.25
+		collision.shape = sphere
+		pickup.add_child(collision)
+		var mesh := MeshInstance3D.new()
+		var crate := BoxMesh.new()
+		crate.size = Vector3(0.62, 0.62, 0.62)
+		mesh.mesh = crate
+		var material := StandardMaterial3D.new()
+		var is_health := index % 2 == 0
+		material.albedo_color = Color(0.16, 0.9, 0.32) if is_health else Color(1.0, 0.72, 0.12)
+		material.emission_enabled = true
+		material.emission = material.albedo_color * 0.35
+		mesh.material_override = material
+		mesh.position.y = 0.48
+		pickup.add_child(mesh)
+		map_root.add_child(pickup)
+		pickup.body_entered.connect(_on_pickup_body_entered.bind(index))
+		pickup_areas.append(pickup)
+		pickup_respawn_timers.append(0.0)
+		pickup_types.append(0 if is_health else 1)
+		_place_pickup(index)
+	print("COMBAT_PICKUPS_READY count=", pickup_areas.size())
+
+func _place_pickup(index: int) -> void:
+	if index < 0 or index >= pickup_areas.size():
+		return
+	var candidates := _get_original_spawn_positions("generic")
+	var reference := _choose_spawn_position(candidates, used_spawn_positions) if not candidates.is_empty() else _map_center() + Vector3(rng.randf_range(-25.0, 25.0), 0.0, rng.randf_range(-25.0, 25.0))
+	var floor_hit := _find_floor(reference, 22.0)
+	if floor_hit.is_empty():
+		floor_hit = _find_floor(_map_center(), 30.0)
+	if floor_hit.is_empty():
+		pickup_areas[index].visible = false
+		pickup_areas[index].monitoring = false
+		push_warning("Pickup %d could not find a valid floor position." % index)
+		return
+	pickup_areas[index].global_position = floor_hit.position + Vector3.UP * 0.12
+	pickup_areas[index].rotation.y = rng.randf_range(0.0, TAU)
+	pickup_areas[index].visible = true
+	pickup_areas[index].monitoring = true
+
+func _on_pickup_body_entered(body: Node3D, index: int) -> void:
+	if body != player or index < 0 or index >= pickup_areas.size():
+		return
+	if pickup_respawn_timers[index] > 0.0:
+		return
+	if pickup_types[index] == 0:
+		var recovered := mini(40, 100 - health)
+		health = mini(100, health + 40)
+		status_label.text = "KIT MÉDICO +%d VIDA" % recovered if recovered > 0 else "VIDA JÁ ESTÁ COMPLETA"
+	else:
+		var total_added := 0
+		for weapon_index_value in range(WEAPON_CATALOG.size()):
+			var amount := maxi(1, int(WEAPON_CATALOG[weapon_index_value]["reserve"]) / 2)
+			weapon_reserves[weapon_index_value] += amount
+			total_added += amount
+		reserve_ammo = weapon_reserves[weapon_index]
+		status_label.text = "CAIXA DE MUNIÇÃO +%d" % total_added
+	pickup_areas[index].visible = false
+	pickup_areas[index].monitoring = false
+	pickup_respawn_timers[index] = 20.0
+	_update_hud()
+
+func _update_pickup_respawns(delta: float) -> void:
+	for index in range(pickup_respawn_timers.size()):
+		if pickup_respawn_timers[index] <= 0.0:
+			continue
+		pickup_respawn_timers[index] = maxf(0.0, pickup_respawn_timers[index] - delta)
+		if pickup_respawn_timers[index] <= 0.0:
+			_place_pickup(index)
+
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 30
@@ -604,6 +691,7 @@ func _apply_look(relative: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
+	_update_pickup_respawns(delta)
 	if is_instance_valid(radar):
 		radar.call("update_radar", player, map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false))
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
