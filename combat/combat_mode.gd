@@ -867,7 +867,7 @@ func _has_line_of_sight(source: Node3D, target: Node3D) -> bool:
 	var from := source.global_position + Vector3.UP * 1.35
 	var to := target.global_position + Vector3.UP * 1.1
 	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.collision_mask = 3
+	query.collision_mask = 7
 	query.exclude = [source.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	return not hit.is_empty() and hit.collider == target
@@ -879,7 +879,7 @@ func bot_shoot(bot: CharacterBody3D) -> void:
 	var from := bot.global_position + Vector3.UP * 1.35
 	var to := target.global_position + Vector3.UP * 1.1
 	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.collision_mask = 3
+	query.collision_mask = 7
 	query.exclude = [bot.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or hit.collider != target:
