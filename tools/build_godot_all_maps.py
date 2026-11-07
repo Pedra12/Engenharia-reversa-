@@ -714,7 +714,7 @@ func _run_combat_audit():
     if bots.size()>0:
         var bot_anim=bots[0].get("anim_player")
         if is_instance_valid(bot_anim):
-            bot_animation_ok=bot_anim.has_clip("front_run") and bot_anim.has_clip("Fire") and bot_anim.has_clip("Hit Reaction")
+            bot_animation_ok=bot_anim.has_clip("front_run") and bot_anim.has_clip("left_walk") and bot_anim.has_clip("right_walk") and bot_anim.has_clip("back_run") and bot_anim.has_clip("Fire") and bot_anim.has_clip("Hit Reaction")
         print("BLOCKGUN_ANIMATION_AUDIT locomotion_fire_hit=",bot_animation_ok," current=",bot_anim.get_current_animation() if is_instance_valid(bot_anim) else "missing")
     var soldier_mesh_ok=false
     var soldier_texture_ok=false
