@@ -28,6 +28,8 @@ func create_rig(parent: Node3D, rig_name: String, apply_model_parent: bool = fal
 	root.name = rig_name + "_OriginalModel"
 	if apply_model_parent:
 		root.transform = _transform_from_record(rig.get("model_parent_transform", {}))
+	# Always attach the recovered model root. Without this, its skeleton and mesh
+	# exist only as an orphaned subtree and never render in the combat scene.
 	parent.add_child(root)
 
 	var skeleton := Skeleton3D.new()
