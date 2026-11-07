@@ -285,6 +285,7 @@ func _create_player() -> void:
 		weapon_mount.add_child(weapon_animation_player)
 		weapon_animation_player.setup(player_fp_rig.get("rig_data", {}), player_fp_rig["skeleton"])
 		weapon_animation_player.sound_event.connect(_on_weapon_sound_event)
+		weapon_animation_player.clip_finished.connect(_on_weapon_clip_finished)
 		weapon_animation_player.play("Deploy", 1.0, false)
 	_create_audio()
 
@@ -562,12 +563,8 @@ func _physics_process(delta: float) -> void:
 		_fire()
 	if reload_timer > 0.0:
 		reload_timer -= delta
-		if reload_timer <= 0.0:
-			var needed = 30 - ammo
-			var loaded = mini(needed, reserve_ammo)
-			ammo += loaded
-			reserve_ammo -= loaded
-			_update_hud()
+		if reload_timer <= 0.0 and not (weapon_animation_player and weapon_animation_player.is_playing_clip("Reload")):
+			_finish_reload()
 	if dead_timer > 0.0:
 		dead_timer -= delta
 		if dead_timer <= 0.0:
@@ -643,6 +640,22 @@ func _fire() -> void:
 				status_label.text = "ALVO ELIMINADO"
 	_update_hud()
 
+func _on_weapon_clip_finished(animation_name: String) -> void:
+	if animation_name == "Reload":
+		_finish_reload()
+
+func _finish_reload() -> void:
+	if reload_timer <= 0.0 and ammo >= 30:
+		return
+	var needed := 30 - ammo
+	var loaded := mini(needed, reserve_ammo)
+	ammo += loaded
+	reserve_ammo -= loaded
+	reload_timer = 0.0
+	_update_hud()
+	if is_instance_valid(status_label):
+		status_label.text = "CARREGADOR COMPLETO" if loaded > 0 else "SEM MUNIÇÃO RESERVA"
+
 func _on_weapon_sound_event(sound_name: String, resource_path: String) -> void:
 	if resource_path.is_empty() or not ResourceLoader.exists(resource_path):
 		return
@@ -701,9 +714,14 @@ func _remove_dead_bot(bot: Node3D) -> void:
 func _reload() -> void:
 	if reload_timer > 0.0 or ammo >= 30 or reserve_ammo <= 0:
 		return
-	reload_timer = weapon_animation_player.get_duration("Reload") if weapon_animation_player else 3.35
-	if weapon_animation_player:
-		weapon_animation_player.play("Reload", 1.0, false)
+	if not weapon_animation_player or not weapon_animation_player.has_clip("Reload"):
+		push_error("Original UMP45 Reload clip is missing; refusing to substitute a generic reload.")
+		return
+	reload_timer = weapon_animation_player.get_duration("Reload")
+	if not weapon_animation_player.play("Reload", 1.0, false):
+		reload_timer = 0.0
+		push_error("Original UMP45 Reload clip could not start.")
+		return
 	status_label.text = "RECARREGANDO..."
 	if reload_player:
 		reload_player.play()
