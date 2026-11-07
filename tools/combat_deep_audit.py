@@ -70,7 +70,7 @@ def source():
   for n in names:
    rel=pathlib.PurePosixPath(n).relative_to("unity/scripts/csharp"); dest=O/"csharp"/pathlib.Path(*rel.parts); dest.parent.mkdir(parents=True,exist_ok=True)
    data=z.read(n); dest.write_bytes(data); txt=data.decode("utf-8","replace")
-   rows.append({"original_path":n,"exported_path":str(dest),"bytes":len(data),"sha256":hashlib.sha256(data).hexdigest(),"classes":";".join(re.findall(r"\\b(?:class|struct|interface|enum)\\s+([A-Za-z_]\\w*)",txt)),"namespace":(re.search(r"\\bnamespace\\s+([\\w.]+)",txt) or [None,""])[1],"gameplay_related":bool(pat.search(n+" "+txt[:12000]))})
+   rows.append({"original_path":n,"exported_path":str(dest),"bytes":len(data),"sha256":hashlib.sha256(data).hexdigest(),"classes":";".join(re.findall(r"\b(?:class|struct|interface|enum)\\s+([A-Za-z_]\w*)",txt)),"namespace":(re.search(r"\bnamespace\\s+([\w.]+)",txt) or [None,""])[1],"gameplay_related":bool(pat.search(n+" "+txt[:12000]))})
  with (O/"CSHARP_SOURCE_INDEX.csv").open("w",newline="",encoding="utf-8") as f:
   w=csv.DictWriter(f,fieldnames=list(rows[0]) if rows else ["original_path"]);w.writeheader();w.writerows(rows)
  return rows
@@ -99,6 +99,6 @@ def main():
  save("COMBAT_DEEP_AUDIT_SUMMARY.json",summary)
  report=["# Auditoria profunda do combate original","",f"SHA-256 verificado: {sha}",f"Arquivos C# extraídos: {len(cs)}",f"Arquivos C# ligados a gameplay: {summary['gameplay_csharp_files']}",f"MonoScripts de bundle: {len(sc)}",f"GameObjects de bundle indexados: {ng}",f"Componentes de gameplay mapeados: {nc}",f"Controles/HUD nos níveis 3, 5 e 6: {len(h)}",f"Raízes de rig: {nr}",f"Malhas skinned: {ns}",f"Clipes de animação: {na}",f"Animator Controllers: {nc2}","","Arquivos C# relacionados:"]
  report += ["- "+x["original_path"]+" :: "+x["classes"] for x in cs if x["gameplay_related"]]
- (O/"COMBAT_DEEP_AUDIT_REPORT.md").write_text("\\n".join(report),encoding="utf-8")
+ (O/"COMBAT_DEEP_AUDIT_REPORT.md").write_text("\n".join(report),encoding="utf-8")
  print("COMBAT_DEEP_AUDIT_OK",json.dumps(summary,ensure_ascii=False))
 if __name__=="__main__":main()
