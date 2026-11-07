@@ -64,6 +64,11 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	if skeleton.find_bone(socket_name) < 0:
 		socket_name = "hand_r"
 	var attachment := rig_loader.create_bone_attachment(skeleton, socket_name, "OriginalWeaponSocket")
+	# Exact local transform recovered from sharedassets0.assets:
+	# socket_hand_right is parented to hand_r in the original soldier hierarchy.
+	# Apply the same X reflection and quaternion conversion used by the rig importer.
+	attachment.position = Vector3(-0.11462914, 0.14902945, 0.07855457)
+	attachment.quaternion = Quaternion(0.01588862, -0.75679088, -0.62115097, 0.20294526).normalized()
 	attachment.add_child(weapon_mount)
 	if original_weapon_mesh:
 		weapon_visual = MeshInstance3D.new()
