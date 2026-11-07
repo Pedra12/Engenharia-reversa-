@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import csv,hashlib,json,pathlib,re,zipfile
 A=pathlib.Path("blockgun.zip"); B=pathlib.Path("unity_audit"); O=B/"combat_deep"; O.mkdir(parents=True,exist_ok=True)
-EXPECTED="e3e3cc4afac58236657240cc8c403fb56c9b02c9f8efa3b77bcc6044b1b480c"
+EXPECTED="e3e3cc4afac58236657240cc8c403fb56c9b02c9f8efa3b77bcc6044b1b480c0"
 def load(p):
  p=pathlib.Path(p); return json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
 def save(n,x): (O/n).write_text(json.dumps(x,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -9,7 +9,7 @@ def hud():
  rec=load(B/"UNITY_SCENE_OBJECTS.json"); idx={(o.get("source"),str(o.get("path_id"))):o for o in rec}
  gos={(o.get("source"),str(o.get("path_id"))):o for o in rec if o.get("type")=="GameObject"}
  trs={(o.get("source"),str(o.get("path_id"))):o for o in rec if o.get("type") in ("Transform","RectTransform")}
- pat=re.compile(r"WindowPlayer|Joystick|button_fire|aim_button|jump_button|reload_button|Crosshair|SniperScope|AimAssistance|AutoAiming|AimFire|TouchControl|ControlsManager|DamageRadar|BulletTraces|Health|bar_health|WeaponArea|WeaponNameArea|WeaponCount|SpawnPointManager|CoverPointManager|FollowCamerasManager|AutoShooting",re.I)
+ pat=re.compile(r"WindowPlayer|Joystick|button_fire|aim_button|jump_button|reload_button|Crosshair|SniperScope|AimAssistance|AutoAiming|AimFire|TouchControl|ControlsManager|DamageRadar|BulletTraces|Health|bar_health|WeaponArea|WeaponNameArea|WeaponCount|SpawnPointManager|CoverPointManager|FollowCamerasManager|AutoShooting|GenericSpawn|BlueSpawn|YellowSpawn|AllSpawn|SpawnPoint|Attacker Point|DefenderPoints|NeutralPoints",re.I)
  rows=[]
  for (src,gid),g in gos.items():
   if src not in ("level3","level5","level6") or not pat.search(g.get("name","")): continue
@@ -70,7 +70,7 @@ def source():
   for n in names:
    rel=pathlib.PurePosixPath(n).relative_to("unity/scripts/csharp"); dest=O/"csharp"/pathlib.Path(*rel.parts); dest.parent.mkdir(parents=True,exist_ok=True)
    data=z.read(n); dest.write_bytes(data); txt=data.decode("utf-8","replace")
-   rows.append({"original_path":n,"exported_path":str(dest),"bytes":len(data),"sha256":hashlib.sha256(data).hexdigest(),"classes":";".join(re.findall(r"\b(?:class|struct|interface|enum)\\s+([A-Za-z_]\w*)",txt)),"namespace":(re.search(r"\bnamespace\\s+([\w.]+)",txt) or [None,""])[1],"gameplay_related":bool(pat.search(n+" "+txt[:12000]))})
+   rows.append({"original_path":n,"exported_path":str(dest),"bytes":len(data),"sha256":hashlib.sha256(data).hexdigest(),"classes":";".join(re.findall(r"\b(?:class|struct|interface|enum)\s+([A-Za-z_]\w*)",txt)),"namespace":(re.search(r"\bnamespace\s+([\w.]+)",txt) or [None,""])[1],"gameplay_related":bool(pat.search(n+" "+txt[:12000]))})
  with (O/"CSHARP_SOURCE_INDEX.csv").open("w",newline="",encoding="utf-8") as f:
   w=csv.DictWriter(f,fieldnames=list(rows[0]) if rows else ["original_path"]);w.writeheader();w.writerows(rows)
  return rows
