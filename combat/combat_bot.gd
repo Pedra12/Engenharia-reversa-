@@ -23,8 +23,8 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	target = player_target
 	combat = combat_owner
 	rig_loader = original_rig_loader
-	collision_layer = 1
-	collision_mask = 3
+	collision_layer = 4 # layer 3: bots
+	collision_mask = 3 # world (1) + player (2)
 	add_to_group("combat_enemy")
 
 	var capsule := CapsuleShape3D.new()
