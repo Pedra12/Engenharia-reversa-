@@ -865,7 +865,7 @@ func get_best_target(source: CharacterBody3D, source_team: int) -> CharacterBody
 
 func _has_line_of_sight(source: Node3D, target: Node3D) -> bool:
 	var from := source.global_position + Vector3.UP * 1.35
-	var to := target.global_position + Vector3.UP * 1.1
+	var to: Vector3 = target.global_position + Vector3.UP * 1.1
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 7
 	query.exclude = [source.get_rid()]
