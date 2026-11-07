@@ -703,7 +703,7 @@ func _fire() -> void:
 		var headshot := relative_height > 1.42
 		var legshot := relative_height < 0.52
 		var damage := int(round(float(weapon["damage"]) * (1.18 if headshot else (0.8 if legshot else 1.0))))
-		var killed: bool = target.take_damage(damage, headshot, 0)
+		var killed: bool = target.take_damage(damage, headshot, 0, true)
 		_show_damage(damage * (2 if headshot else 1), headshot)
 		if headshot:
 			status_label.text = "TIRO NA CABEÇA"
@@ -808,10 +808,10 @@ func bot_shoot(bot: CharacterBody3D) -> void:
 			status_label.text = "ELIMINADO  |  RETORNANDO..."
 			player.velocity = Vector3.ZERO
 	else:
-		target.take_damage(damage, false, int(bot.get("team_id")))
+		target.take_damage(damage, false, int(bot.get("team_id")), false)
 
-func bot_killed(bot: Node3D, victim_team: int = 1, attacker_team: int = 0) -> void:
-	if attacker_team == 0:
+func bot_killed(bot: Node3D, victim_team: int = 1, attacker_team: int = 0, attacker_is_player: bool = false) -> void:
+	if attacker_is_player:
 		kills += 1
 	elif attacker_team == 1:
 		enemy_kills += 1
