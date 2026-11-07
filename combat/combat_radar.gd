@@ -10,7 +10,10 @@ func _ready() -> void:
 	clip_contents = true
 	var map_path := _find_forest_minimap("res://assets/unity_original/textures")
 	if not map_path.is_empty():
-		var source := Image.load_from_file(map_path)
+		# Load through Godot's import pipeline. Image.load_from_file(res://...) works
+		# in editor runs but bypasses exported resource remapping in Android builds.
+		var imported_texture := ResourceLoader.load(map_path) as Texture2D
+		var source: Image = imported_texture.get_image() if imported_texture != null else null
 		if source != null and not source.is_empty():
 			# Preserve the original forest minimap artwork and mask it to the
 			# same circular viewport used by the recovered Unity radar.
@@ -25,6 +28,11 @@ func _ready() -> void:
 						pixel.a = 0.0
 						source.set_pixel(x, y, pixel)
 			forest_map_texture = ImageTexture.create_from_image(source)
+			print("BLOCKGUN_RADAR_TEXTURE_READY path=", map_path, " size=", width, "x", height)
+		else:
+			push_warning("BLOCKGUN_RADAR_TEXTURE_MISSING imported forest minimap: " + map_path)
+	else:
+		push_warning("BLOCKGUN_RADAR_TEXTURE_MISSING no original forest minimap found")
 
 func _find_forest_minimap(folder_path: String) -> String:
 	var directory := DirAccess.open(folder_path)
