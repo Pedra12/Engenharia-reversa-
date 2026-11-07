@@ -28,19 +28,28 @@ def decode_skin(fields):
     if cursor>len(blob):
         raise ValueError(f"vertex data truncated: expected {cursor}, got {len(blob)}")
     wc,ic=channels[12],channels[13]
-    if int(wc.get("dimension",0))<1 or int(ic.get("dimension",0))<1:
-        raise ValueError("blend weights or indices channels missing")
+    wd=int(wc.get("dimension",0)); idim=int(ic.get("dimension",0))
+    if idim<1:
+        raise ValueError("blend indices channel missing")
+    if wd<1 and idim!=1:
+        raise ValueError("unsupported rigid skinning layout: expected one bone index per vertex")
     weights=[]; indices=[]
     for vi in range(count):
-        wo=offsets[int(wc["stream"])]+vi*strides[int(wc["stream"])]+int(wc["offset"])
         io=offsets[int(ic["stream"])]+vi*strides[int(ic["stream"])]+int(ic["offset"])
-        wd=int(wc["dimension"]); idim=int(ic["dimension"])
-        w=list(struct.unpack_from("<"+"f"*wd,blob,wo))
         b=list(struct.unpack_from("<"+"I"*idim,blob,io))
-        w=(w+[0.0]*4)[:4]; b=(b+[0]*4)[:4]
-        total=sum(w)
-        if total>1e-8: w=[x/total for x in w]
-        else: w=[1.0,0.0,0.0,0.0]; b=[0,0,0,0]
+        if wd<1:
+            # Some original weapon/hand meshes use rigid skinning: one bone index
+            # per vertex and an implicit weight of 1.0. Treating the missing
+            # blend-weight channel as an error discards valid original rigs.
+            w=[1.0,0.0,0.0,0.0]
+            b=(b+[0]*4)[:4]
+        else:
+            wo=offsets[int(wc["stream"])]+vi*strides[int(wc["stream"])]+int(wc["offset"])
+            w=list(struct.unpack_from("<"+"f"*wd,blob,wo))
+            w=(w+[0.0]*4)[:4]; b=(b+[0]*4)[:4]
+            total=sum(w)
+            if total>1e-8: w=[x/total for x in w]
+            else: w=[1.0,0.0,0.0,0.0]; b=[0,0,0,0]
         weights.append(w); indices.append(b)
     return count,weights,indices
 
