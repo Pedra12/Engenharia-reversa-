@@ -57,6 +57,13 @@ var kills := 0
 var allied_kills := 0
 var enemy_kills := 0
 var match_finished := false
+var match_time_left := 180.0
+var blue_team_score := 0
+var red_team_score := 0
+var match_timer_label: Label
+var team_score_label: Label
+var result_panel: Panel
+var result_label: Label
 var pickup_areas: Array[Area3D] = []
 var pickup_respawn_timers: Array[float] = []
 var pickup_types: Array[int] = []
@@ -464,15 +471,35 @@ func _build_hud() -> void:
 	layer.add_child(hud)
 	var top := Panel.new()
 	top.position = Vector2(18, 16)
-	top.size = Vector2(300, 88)
+	top.size = Vector2(340, 112)
 	_style_panel(top, Color(0.025, 0.045, 0.065, 0.82), 12)
 	hud.add_child(top)
 	health_label = _new_label(top, "VIDA 100 / 100", Vector2(14, 8), 22)
 	ammo_label = _new_label(top, "UMP45  30 / 90", Vector2(14, 36), 18)
-	kills_label = _new_label(top, "ELIMINAÇÕES 0", Vector2(172, 43), 15)
+	kills_label = _new_label(top, "SUAS ELIMINAÇÕES 0", Vector2(14, 72), 15)
+	team_score_label = _new_label(hud, "AZUL 00   |   VERMELHO 00", Vector2(0, 48), 19)
+	team_score_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	team_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	match_timer_label = _new_label(hud, "03:00", Vector2(0, 76), 24)
+	match_timer_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	match_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label = _new_label(hud, "BATALHA EM FLORESTA", Vector2(0, 18), 18)
 	status_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_panel = Panel.new()
+	result_panel.set_anchors_preset(Control.PRESET_CENTER)
+	result_panel.position = Vector2(-230, -115)
+	result_panel.size = Vector2(460, 230)
+	_style_panel(result_panel, Color(0.015, 0.025, 0.045, 0.96), 20)
+	result_panel.visible = false
+	hud.add_child(result_panel)
+	result_label = _new_label(result_panel, "VITÓRIA", Vector2(30, 34), 42)
+	result_label.size = Vector2(400, 70)
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.visible = true
+	var result_score := _new_label(result_panel, "PLACAR FINAL", Vector2(30, 112), 22)
+	result_score.size = Vector2(400, 40)
+	result_score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hit_label = _new_label(hud, "+28", Vector2.ZERO, 30)
 	hit_label.visible = false
 	hit_label.set_anchors_preset(Control.PRESET_CENTER)
@@ -696,6 +723,13 @@ func _apply_look(relative: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
+	if match_finished:
+		return
+	match_time_left = maxf(0.0, match_time_left - delta)
+	_update_match_hud()
+	if match_time_left <= 0.0:
+		_finish_match("TIME")
+		return
 	_update_pickup_respawns(delta)
 	if is_instance_valid(radar):
 		radar.call("update_radar", player, map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false))
@@ -897,6 +931,10 @@ func bot_shoot(bot: CharacterBody3D) -> void:
 		_update_hud()
 		if health <= 0:
 			dead_timer = 2.2
+			red_team_score += 1
+			_update_match_hud()
+			if red_team_score >= 20:
+				_finish_match("DEFEAT")
 			player.visible = false
 			status_label.text = "ELIMINADO  |  RETORNANDO..."
 			player.velocity = Vector3.ZERO
@@ -904,19 +942,63 @@ func bot_shoot(bot: CharacterBody3D) -> void:
 		target.take_damage(damage, false, int(bot.get("team_id")), false)
 
 func bot_killed(bot: Node3D, victim_team: int = 1, attacker_team: int = 0, attacker_is_player: bool = false) -> void:
-	if attacker_is_player:
-		kills += 1
-	elif attacker_team == 1:
-		enemy_kills += 1
+	if attacker_team == 0:
+		blue_team_score += 1
+		if attacker_is_player:
+			kills += 1
+		else:
+			allied_kills += 1
 	else:
-		allied_kills += 1
-	if is_instance_valid(kills_label):
-		kills_label.text = "ELIMINAÇÕES %d / 20" % kills
-	if kills >= 20 and not match_finished:
-		match_finished = true
-		status_label.text = "VITÓRIA! 20 ELIMINAÇÕES"
+		red_team_score += 1
+		enemy_kills += 1
+	_update_match_hud()
+	if blue_team_score >= 20:
+		_finish_match("VICTORY")
+		return
+	if red_team_score >= 20:
+		_finish_match("DEFEAT")
 		return
 	_respawn_bot.call_deferred(bot, victim_team)
+
+func _update_match_hud() -> void:
+	if is_instance_valid(match_timer_label):
+		var seconds_left := int(ceil(match_time_left))
+		match_timer_label.text = "%02d:%02d" % [seconds_left / 60, seconds_left % 60]
+	if is_instance_valid(team_score_label):
+		team_score_label.text = "AZUL %02d   |   VERMELHO %02d" % [blue_team_score, red_team_score]
+	if is_instance_valid(kills_label):
+		kills_label.text = "SUAS ELIMINAÇÕES %d" % kills
+
+func _finish_match(result: String) -> void:
+	if match_finished:
+		return
+	match_finished = true
+	fire_left_held = false
+	fire_right_held = false
+	if result == "TIME":
+		if blue_team_score > red_team_score:
+			result = "VICTORY"
+		elif red_team_score > blue_team_score:
+			result = "DEFEAT"
+		else:
+			result = "DRAW"
+	if result == "VICTORY":
+		status_label.text = "VITÓRIA! EQUIPE AZUL"
+		if is_instance_valid(result_label):
+			result_label.text = "VITÓRIA"
+	elif result == "DEFEAT":
+		status_label.text = "DERROTA! EQUIPE VERMELHA"
+		if is_instance_valid(result_label):
+			result_label.text = "DERROTA"
+	else:
+		status_label.text = "EMPATE"
+		if is_instance_valid(result_label):
+			result_label.text = "EMPATE"
+	if is_instance_valid(result_panel):
+		result_panel.visible = true
+	if is_instance_valid(result_label):
+		result_label.visible = true
+	_update_match_hud()
 
 func _respawn_bot(bot: Node3D, team_id: int) -> void:
 	if not is_instance_valid(bot):
@@ -1004,7 +1086,8 @@ func _update_hud() -> void:
 	if is_instance_valid(ammo_label):
 		ammo_label.text = "%s  %02d / %02d" % [String(WEAPON_CATALOG[weapon_index]["name"]), ammo, reserve_ammo]
 	if is_instance_valid(kills_label):
-		kills_label.text = "ELIMINAÇÕES %d" % kills
+		kills_label.text = "SUAS ELIMINAÇÕES %d" % kills
+	_update_match_hud()
 
 func shutdown() -> void:
 	get_tree().paused = false
