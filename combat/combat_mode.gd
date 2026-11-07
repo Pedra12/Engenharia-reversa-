@@ -875,9 +875,9 @@ func _has_line_of_sight(source: Node3D, target: Node3D) -> bool:
 func bot_shoot(bot: CharacterBody3D) -> void:
 	if match_finished or not is_instance_valid(bot) or not is_instance_valid(bot.get("target")):
 		return
-	var target = bot.get("target")
+	var target: Node3D = bot.get("target") as Node3D
 	var from := bot.global_position + Vector3.UP * 1.35
-	var to := target.global_position + Vector3.UP * 1.1
+	var to: Vector3 = target.global_position + Vector3.UP * 1.1
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 7
 	query.exclude = [bot.get_rid()]
