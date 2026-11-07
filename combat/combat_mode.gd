@@ -54,6 +54,9 @@ var weapon_index := 0
 var weapon_magazines: Array[int] = []
 var weapon_reserves: Array[int] = []
 var kills := 0
+var allied_kills := 0
+var enemy_kills := 0
+var match_finished := false
 var fire_cooldown := 0.0
 var reload_timer := 0.0
 var footstep_timer := 0.0
@@ -83,7 +86,7 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	_create_player()
 	_create_bots()
 	_build_hud()
-	print("COMBAT_MODE_READY map=Floresta bots=3 weapon=UMP45")
+	print("COMBAT_MODE_READY map=Floresta allies=2 enemies=4 weapon=UMP45")
 
 func _prepare_assets() -> void:
 	rig_loader = RIG_LOADER_SCRIPT.new()
@@ -341,7 +344,7 @@ func _create_bots() -> void:
 		return
 	var candidates := _get_original_spawn_positions("generic")
 	var fallback_offsets := [Vector3(10, 0, 4), Vector3(-12, 0, -5), Vector3(5, 0, -15)]
-	for index in range(3):
+	for index in range(6):
 		var guess: Vector3 = _choose_spawn_position(candidates, used_spawn_positions) if not candidates.is_empty() else spawn_position + fallback_offsets[index]
 		var floor_hit := _find_floor(guess, 8.0)
 		if floor_hit.is_empty():
@@ -354,7 +357,8 @@ func _create_bots() -> void:
 		map_root.add_child(bot)
 		bot.global_position = floor_hit.position + Vector3.UP * 0.12
 		used_spawn_positions.append(bot.global_position)
-		bot.call("configure", player, self, rig_loader, load(UMP_MESH_PATH), weapon_material)
+		var assigned_team := 0 if index < 2 else 1
+		bot.call("configure", player, self, rig_loader, load(UMP_MESH_PATH), weapon_material, assigned_team)
 	print("COMBAT_BOTS_SPAWNED count=", map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false).size(), " original_generic_spawns=", candidates.size())
 
 func _build_hud() -> void:
@@ -603,7 +607,7 @@ func _physics_process(delta: float) -> void:
 	if is_instance_valid(radar):
 		radar.call("update_radar", player, map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false))
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
-	if fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0 and _auto_fire_target_visible():
+	if not match_finished and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0 and _auto_fire_target_visible():
 		_fire()
 	if reload_timer > 0.0:
 		reload_timer -= delta
@@ -699,7 +703,7 @@ func _fire() -> void:
 		var headshot := relative_height > 1.42
 		var legshot := relative_height < 0.52
 		var damage := int(round(float(weapon["damage"]) * (1.18 if headshot else (0.8 if legshot else 1.0))))
-		var killed: bool = target.take_damage(damage, headshot)
+		var killed: bool = target.take_damage(damage, headshot, 0)
 		_show_damage(damage * (2 if headshot else 1), headshot)
 		if headshot:
 			status_label.text = "TIRO NA CABEÇA"
@@ -751,33 +755,91 @@ func _show_damage(amount: int, headshot: bool) -> void:
 	tween.tween_property(hit_label, "position", Vector2(-80, -108), 0.42)
 	tween.tween_callback(func(): hit_label.visible = false)
 
+func get_best_target(source: CharacterBody3D, source_team: int) -> CharacterBody3D:
+	var best: CharacterBody3D
+	var best_distance := INF
+	if source_team != 0 and dead_timer <= 0.0 and is_instance_valid(player) and player.visible:
+		var player_distance := source.global_position.distance_to(player.global_position)
+		if player_distance < 55.0 and _has_line_of_sight(source, player) and player_distance < best_distance:
+			best = player
+			best_distance = player_distance
+	for candidate in map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false):
+		if candidate == source or not is_instance_valid(candidate) or candidate.get("dead") == true:
+			continue
+		var candidate_team := int(candidate.get("team_id"))
+		if candidate_team == source_team:
+			continue
+		var distance := source.global_position.distance_to(candidate.global_position)
+		if distance < 55.0 and distance < best_distance and _has_line_of_sight(source, candidate):
+			best = candidate
+			best_distance = distance
+	return best
+
+func _has_line_of_sight(source: Node3D, target: Node3D) -> bool:
+	var from := source.global_position + Vector3.UP * 1.35
+	var to := target.global_position + Vector3.UP * 1.1
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 3
+	query.exclude = [source.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider == target
+
 func bot_shoot(bot: CharacterBody3D) -> void:
-	if dead_timer > 0.0 or not is_instance_valid(player):
+	if match_finished or not is_instance_valid(bot) or not is_instance_valid(bot.get("target")):
 		return
-	var from = bot.global_position + Vector3.UP * 1.35
-	var to = player.global_position + Vector3.UP * 1.1
-	var query = PhysicsRayQueryParameters3D.create(from, to)
+	var target = bot.get("target")
+	var from := bot.global_position + Vector3.UP * 1.35
+	var to := target.global_position + Vector3.UP * 1.1
+	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 3
 	query.exclude = [bot.get_rid()]
-	var hit = get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty() and hit.collider == player:
-		health = maxi(0, health - rng.randi_range(6, 11))
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or hit.collider != target:
+		return
+	var damage := rng.randi_range(6, 11)
+	if target == player:
+		if dead_timer > 0.0:
+			return
+		health = maxi(0, health - damage)
 		_update_hud()
 		if health <= 0:
 			dead_timer = 2.2
 			player.visible = false
 			status_label.text = "ELIMINADO  |  RETORNANDO..."
 			player.velocity = Vector3.ZERO
+	else:
+		target.take_damage(damage, false, int(bot.get("team_id")))
 
-func bot_killed(bot: Node3D) -> void:
-	kills += 1
+func bot_killed(bot: Node3D, victim_team: int = 1, attacker_team: int = 0) -> void:
+	if attacker_team == 0:
+		kills += 1
+	elif attacker_team == 1:
+		enemy_kills += 1
+	else:
+		allied_kills += 1
 	if is_instance_valid(kills_label):
-		kills_label.text = "ELIMINAÇÕES %d" % kills
-	_remove_dead_bot.call_deferred(bot)
-func _remove_dead_bot(bot: Node3D) -> void:
-	await get_tree().create_timer(1.15).timeout
-	if is_instance_valid(bot):
-		bot.queue_free()
+		kills_label.text = "ELIMINAÇÕES %d / 20" % kills
+	if kills >= 20 and not match_finished:
+		match_finished = true
+		status_label.text = "VITÓRIA! 20 ELIMINAÇÕES"
+		return
+	_respawn_bot.call_deferred(bot, victim_team)
+
+func _respawn_bot(bot: Node3D, team_id: int) -> void:
+	if not is_instance_valid(bot):
+		return
+	await get_tree().create_timer(4.0).timeout
+	if not is_instance_valid(bot) or match_finished:
+		return
+	var candidates := _get_original_spawn_positions("generic")
+	var reference := _choose_spawn_position(candidates, used_spawn_positions) if not candidates.is_empty() else _map_center() + Vector3(rng.randf_range(-20.0,20.0),0.0,rng.randf_range(-20.0,20.0))
+	var floor_hit := _find_floor(reference, 24.0)
+	if floor_hit.is_empty():
+		floor_hit = _find_floor(_map_center(), 30.0)
+	if floor_hit.is_empty():
+		push_warning("Bot respawn skipped: no valid floor position found.")
+		return
+	bot.call("reset_for_respawn", floor_hit.position + Vector3.UP * 0.12)
 
 func _reload() -> void:
 	var weapon: Dictionary = WEAPON_CATALOG[weapon_index]
