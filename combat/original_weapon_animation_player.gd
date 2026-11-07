@@ -2,6 +2,7 @@ extends Node
 class_name OriginalWeaponAnimationPlayer
 
 signal sound_event(sound_name: String, resource_path: String)
+signal clip_finished(animation_name: String)
 
 var _skeleton: Skeleton3D
 var _animations: Dictionary = {}
@@ -74,7 +75,9 @@ func _process(delta: float) -> void:
 	_apply_pose(_time)
 	if not _loop and _time >= duration:
 		_playing = false
-		if _current_name != "Idle" and _animations.has("Idle"):
+		var completed_name := _current_name
+		emit_signal("clip_finished", completed_name)
+		if completed_name != "Idle" and _animations.has("Idle"):
 			call_deferred("play", "Idle", 1.0, true)
 
 func _apply_pose(at_time: float) -> void:
@@ -157,3 +160,6 @@ func _emit_events(from_time: float, to_time: float) -> void:
 		var event_time := float(event.get("time", 0.0))
 		if event_time > from_time and event_time <= to_time:
 			emit_signal("sound_event", String(event.get("data", "")), String(event.get("sound_path", "")))
+
+func is_playing_clip(animation_name: String) -> bool:
+	return _playing and _current_name == animation_name
