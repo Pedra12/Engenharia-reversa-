@@ -4,6 +4,13 @@ const BOT_SCRIPT = preload("res://combat/combat_bot.gd")
 const RIG_LOADER_SCRIPT = preload("res://combat/original_rig_loader.gd")
 const WEAPON_ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_weapon_animation_player.gd")
 const COMBAT_RADAR_SCRIPT = preload("res://combat/combat_radar.gd")
+const WEAPON_CATALOG: Array[Dictionary] = [
+	{"name": "Fuzil", "damage": 24.0, "fire_rate": 10.0, "magazine": 30, "reserve": 120, "spread": 0.012, "pellets": 1, "recoil": 0.020, "reload": 1.8, "zoom": 1.5, "range": 70.0},
+	{"name": "SMG", "damage": 15.0, "fire_rate": 15.38, "magazine": 40, "reserve": 160, "spread": 0.020, "pellets": 1, "recoil": 0.012, "reload": 1.5, "zoom": 1.3, "range": 70.0},
+	{"name": "Escopeta", "damage": 12.0, "fire_rate": 1.11, "magazine": 8, "reserve": 32, "spread": 0.070, "pellets": 8, "recoil": 0.060, "reload": 2.2, "zoom": 1.2, "range": 45.0},
+	{"name": "Sniper", "damage": 95.0, "fire_rate": 0.77, "magazine": 5, "reserve": 20, "spread": 0.001, "pellets": 1, "recoil": 0.090, "reload": 2.4, "zoom": 4.0, "range": 110.0},
+	{"name": "Pistola", "damage": 34.0, "fire_rate": 3.33, "magazine": 12, "reserve": 48, "spread": 0.008, "pellets": 1, "recoil": 0.040, "reload": 1.2, "zoom": 1.3, "range": 55.0}
+]
 const UMP_MESH_PATH = "res://assets/combat_source/meshes/UMP_45_2.obj"
 const SOLDIER_TEXTURE_PATH = "res://assets/combat_source/textures/SimpleMilitary_Soldier01_Black_-6561600483854028127.png"
 const UMP_TEXTURE_PATH = "res://assets/combat_source/textures/UMP_45_Diffuse_-7805003812694618604.png"
@@ -42,7 +49,10 @@ var look_yaw := 0.0
 var look_pitch := -0.10
 var health := 100
 var ammo := 30
-var reserve_ammo := 90
+var reserve_ammo := 120
+var weapon_index := 0
+var weapon_magazines: Array[int] = []
+var weapon_reserves: Array[int] = []
 var kills := 0
 var fire_cooldown := 0.0
 var reload_timer := 0.0
@@ -66,6 +76,7 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	map_root = existing_map
 	return_callback = on_return
 	rng.randomize()
+	_initialize_weapon_inventory()
 	_prepare_assets()
 	_load_original_spawn_points()
 	_create_navigation_region()
@@ -425,11 +436,10 @@ func _build_hud() -> void:
 	var fire_icon := _find_original_ui_texture("Sprite_CF-Button-Fire")
 	var aim_icon := _find_original_ui_texture("Sprite_ui_icon_aim")
 	var reload_icon := _find_original_ui_texture("Sprite_ui_icon_reload")
-	_make_hold_button("ATIRAR", Vector2(-419.5, -420.5) * ui_scale, Vector2(215.0, 215.0) * ui_scale, true, "right", fire_icon)
-	_make_hold_button("ATIRAR", Vector2(41.0, -139.0) * ui_scale, Vector2(150.0, 150.0) * ui_scale, false, "left", fire_icon, true)
 	_make_button("MIRA", Vector2(-420.5, -562.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_aim, true, aim_icon)
 	_make_button("PULAR", Vector2(-191.5, -423.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _jump, true)
 	_make_button("RECARREGAR", Vector2(-562.5, -419.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _reload, true, reload_icon)
+	_make_button("TROCAR", Vector2(-270.0, -270.0) * ui_scale, Vector2(112.0, 112.0) * ui_scale, _swap_weapon, true)
 	_make_button("AGACHAR", Vector2(-422.5, -193.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_crouch, true)
 	_make_button("SAIR", Vector2(18.0, 116.0) * ui_scale, Vector2(88.0, 54.0) * ui_scale, _exit_combat, false)
 	# Four independent thin bars keep the aim point truly centered at any aspect ratio.
@@ -593,7 +603,7 @@ func _physics_process(delta: float) -> void:
 	if is_instance_valid(radar):
 		radar.call("update_radar", player, map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false))
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
-	if (fire_left_held or fire_right_held) and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
+	if fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0 and _auto_fire_target_visible():
 		_fire()
 	if reload_timer > 0.0:
 		reload_timer -= delta
@@ -640,38 +650,61 @@ func _physics_process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_SPACE):
 		_jump()
 
+func _auto_fire_target_visible() -> bool:
+	if not is_instance_valid(camera) or not is_instance_valid(player):
+		return false
+	var origin := camera.global_position
+	var direction := -camera.global_transform.basis.z
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 70.0)
+	query.collision_mask = 5
+	query.exclude = [player.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider is Node and hit.collider.has_method("take_damage")
+
 func _fire() -> void:
 	if fire_cooldown > 0.0 or reload_timer > 0.0 or dead_timer > 0.0:
 		return
+	var weapon: Dictionary = WEAPON_CATALOG[weapon_index]
 	if ammo <= 0:
-		status_label.text = "SEM MUNIÇÃO: RECARREGUE"
+		status_label.text = "SEM MUNIÇÃO: RECARREGANDO"
+		_reload()
 		return
 	ammo -= 1
-	fire_cooldown = 0.12
+	fire_cooldown = 1.0 / float(weapon["fire_rate"])
 	if weapon_animation_player:
 		weapon_animation_player.play("Fire", 1.0, false)
 	if weapon_mount:
-		weapon_mount.position.z = 0.035
-		var tween = create_tween()
+		weapon_mount.position.z = float(weapon["recoil"])
+		var tween := create_tween()
 		tween.tween_property(weapon_mount, "position:z", 0.0, 0.09)
+		camera_pivot.rotation.x = clampf(camera_pivot.rotation.x - float(weapon["recoil"]) * 0.8, -0.72, 0.45)
 	_play_weapon_sound("ump45_fire")
-	var origin = camera.global_position
-	var direction = -camera.global_transform.basis.z
-	var query = PhysicsRayQueryParameters3D.create(origin, origin + direction * 110.0)
-	query.collision_mask = 5 # world (1) blocks shots; bot hitboxes use layer 3
-	query.exclude = [player.get_rid()]
-	var hit = get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty():
+	var origin := camera.global_position
+	var forward := -camera.global_transform.basis.z
+	var right := camera.global_transform.basis.x
+	var up := camera.global_transform.basis.y
+	for pellet in range(int(weapon["pellets"])):
+		var spread := float(weapon["spread"])
+		var direction := (forward + right * rng.randf_range(-spread, spread) + up * rng.randf_range(-spread, spread)).normalized()
+		var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * float(weapon["range"]))
+		query.collision_mask = 5
+		query.exclude = [player.get_rid()]
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			continue
 		var target = hit.collider
-		if target and target.has_method("take_damage"):
-			var headshot = hit.position.y > target.global_position.y + 1.42
-			var damage = 55 if headshot else 28
-			var killed = target.take_damage(damage)
-			_show_damage(damage, headshot)
-			if headshot:
-				status_label.text = "TIRO NA CABEÇA"
-			if killed:
-				status_label.text = "ALVO ELIMINADO"
+		if not target or not target.has_method("take_damage"):
+			continue
+		var relative_height: float = hit.position.y - target.global_position.y
+		var headshot := relative_height > 1.42
+		var legshot := relative_height < 0.52
+		var damage := int(round(float(weapon["damage"]) * (1.18 if headshot else (0.8 if legshot else 1.0))))
+		var killed: bool = target.take_damage(damage, headshot)
+		_show_damage(damage * (2 if headshot else 1), headshot)
+		if headshot:
+			status_label.text = "TIRO NA CABEÇA"
+		elif killed:
+			status_label.text = "ALVO ELIMINADO"
 	_update_hud()
 
 func _on_weapon_clip_finished(animation_name: String) -> void:
@@ -679,9 +712,10 @@ func _on_weapon_clip_finished(animation_name: String) -> void:
 		_finish_reload()
 
 func _finish_reload() -> void:
-	if reload_timer <= 0.0 and ammo >= 30:
+	var capacity := int(WEAPON_CATALOG[weapon_index]["magazine"])
+	if reload_timer <= 0.0 and ammo >= capacity:
 		return
-	var needed := 30 - ammo
+	var needed := capacity - ammo
 	var loaded := mini(needed, reserve_ammo)
 	ammo += loaded
 	reserve_ammo -= loaded
@@ -746,23 +780,47 @@ func _remove_dead_bot(bot: Node3D) -> void:
 		bot.queue_free()
 
 func _reload() -> void:
-	if reload_timer > 0.0 or ammo >= 30 or reserve_ammo <= 0:
+	var weapon: Dictionary = WEAPON_CATALOG[weapon_index]
+	var capacity := int(weapon["magazine"])
+	if reload_timer > 0.0 or ammo >= capacity or reserve_ammo <= 0:
 		return
-	if not weapon_animation_player or not weapon_animation_player.has_clip("Reload"):
-		push_error("Original UMP45 Reload clip is missing; refusing to substitute a generic reload.")
-		return
-	reload_timer = weapon_animation_player.get_duration("Reload")
-	if not weapon_animation_player.play("Reload", 1.0, false):
-		reload_timer = 0.0
-		push_error("Original UMP45 Reload clip could not start.")
-		return
+	var reload_duration := float(weapon["reload"])
+	if weapon_animation_player and weapon_animation_player.has_clip("Reload"):
+		reload_duration = weapon_animation_player.get_duration("Reload")
+		weapon_animation_player.play("Reload", 1.0, false)
+	reload_timer = reload_duration
 	status_label.text = "RECARREGANDO..."
 	if reload_player:
 		reload_player.play()
 
+func _initialize_weapon_inventory() -> void:
+	weapon_magazines.clear()
+	weapon_reserves.clear()
+	for weapon in WEAPON_CATALOG:
+		weapon_magazines.append(int(weapon["magazine"]))
+		weapon_reserves.append(int(weapon["reserve"]))
+	weapon_index = 0
+	ammo = weapon_magazines[0]
+	reserve_ammo = weapon_reserves[0]
+
+func _swap_weapon() -> void:
+	if reload_timer > 0.0:
+		reload_timer = 0.0
+		if weapon_animation_player and weapon_animation_player.is_playing_clip("Reload"):
+			weapon_animation_player.stop()
+	weapon_magazines[weapon_index] = ammo
+	weapon_reserves[weapon_index] = reserve_ammo
+	weapon_index = (weapon_index + 1) % WEAPON_CATALOG.size()
+	ammo = weapon_magazines[weapon_index]
+	reserve_ammo = weapon_reserves[weapon_index]
+	var weapon: Dictionary = WEAPON_CATALOG[weapon_index]
+	camera.fov = 70.0 / float(weapon["zoom"]) if aiming else 70.0
+	status_label.text = "ARMA: " + String(weapon["name"])
+	_update_hud()
+
 func _toggle_aim() -> void:
 	aiming = not aiming
-	camera.fov = 54.0 if aiming else 70.0
+	camera.fov = 70.0 / float(WEAPON_CATALOG[weapon_index]["zoom"]) if aiming else 70.0
 	status_label.text = "MIRA ATIVADA" if aiming else "MODO DE DISPARO"
 
 func _toggle_crouch() -> void:
@@ -789,7 +847,7 @@ func _update_hud() -> void:
 		health_label.text = "VIDA %d / 100" % health
 		health_label.add_theme_color_override("font_color", Color(1.0, 0.36, 0.3) if health < 35 else Color(0.91, 0.96, 1.0))
 	if is_instance_valid(ammo_label):
-		ammo_label.text = "UMP45  %02d / %02d" % [ammo, reserve_ammo]
+		ammo_label.text = "%s  %02d / %02d" % [String(WEAPON_CATALOG[weapon_index]["name"]), ammo, reserve_ammo]
 	if is_instance_valid(kills_label):
 		kills_label.text = "ELIMINAÇÕES %d" % kills
 
