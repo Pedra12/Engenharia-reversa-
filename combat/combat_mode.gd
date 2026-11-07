@@ -344,25 +344,52 @@ func _build_hud() -> void:
 	hit_label = _new_label(hud, "+28", Vector2.ZERO, 30)
 	hit_label.visible = false
 	hit_label.set_anchors_preset(Control.PRESET_CENTER)
-	var screen = get_viewport().get_visible_rect().size
+	var screen := get_viewport().get_visible_rect().size
+	var ui_scale := minf(screen.x / 1920.0, screen.y / 1080.0)
+	# Positions and sizes recovered from WindowPlayer/Content/MobileCanvas in Unity.
 	joystick_bg = Panel.new()
-	joystick_bg.position = Vector2(42, screen.y - 192)
-	joystick_bg.size = Vector2(142, 142)
+	joystick_bg.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	joystick_bg.position = Vector2(167.0, -300.0) * ui_scale
+	joystick_bg.size = Vector2(250.0, 250.0) * ui_scale
 	joystick_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_panel(joystick_bg, Color(0.08, 0.12, 0.16, 0.46), 72)
+	_style_panel(joystick_bg, Color(0.08, 0.12, 0.16, 0.28), 125)
 	hud.add_child(joystick_bg)
+	var joystick_base_path := _find_original_ui_texture("Sprite_ui_gameplay_left_joystick")
+	if not joystick_base_path.is_empty():
+		var joystick_base := TextureRect.new()
+		joystick_base.texture = load(joystick_base_path)
+		joystick_base.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		joystick_base.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		joystick_base.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		joystick_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		joystick_bg.add_child(joystick_base)
 	joystick_knob = Panel.new()
-	joystick_knob.position = Vector2(48, 48)
-	joystick_knob.size = Vector2(46, 46)
+	joystick_knob.size = Vector2(86.0, 86.0) * ui_scale
+	joystick_knob.position = (joystick_bg.size - joystick_knob.size) * 0.5
 	joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_panel(joystick_knob, Color(0.62, 0.78, 0.88, 0.72), 24)
+	_style_panel(joystick_knob, Color(0.62, 0.78, 0.88, 0.68), 48)
 	joystick_bg.add_child(joystick_knob)
-	_make_hold_button("ATIRAR", Vector2(42, screen.y - 330), Vector2(104, 104), false, "left")
-	_make_hold_button("ATIRAR", Vector2(-126, -278), Vector2(112, 112), true, "right")
-	_make_button("MIRA", Vector2(-254, -164), Vector2(108, 62), _toggle_aim)
-	_make_button("PULAR", Vector2(-130, -154), Vector2(112, 62), _jump)
-	_make_button("RECARREGAR", Vector2(-254, -88), Vector2(108, 58), _reload)
-	_make_button("SAIR", Vector2(18, -82), Vector2(88, 54), _exit_combat, false)
+	var joystick_knob_path := _find_original_ui_texture("Sprite_ui_gameplay_joystick_knob")
+	if not joystick_knob_path.is_empty():
+		var knob_texture := TextureRect.new()
+		knob_texture.texture = load(joystick_knob_path)
+		knob_texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		knob_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		knob_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		knob_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		joystick_knob.add_child(knob_texture)
+	var fire_icon := _find_original_ui_texture("Sprite_CF-Button-Fire")
+	var aim_icon := _find_original_ui_texture("Sprite_ui_icon_aim")
+	var reload_icon := _find_original_ui_texture("Sprite_ui_icon_reload")
+	_make_hold_button("ATIRAR", Vector2(-419.5, -420.5) * ui_scale, Vector2(215.0, 215.0) * ui_scale, true, "right", fire_icon)
+	_make_hold_button("ATIRAR", Vector2(41.0, -139.0) * ui_scale, Vector2(150.0, 150.0) * ui_scale, false, "left", fire_icon, true)
+	_make_button("MIRA", Vector2(-420.5, -562.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_aim, true, aim_icon)
+	_make_button("PULAR", Vector2(-191.5, -423.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _jump, true)
+	_make_button("RECARREGAR", Vector2(-562.5, -419.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _reload, true, reload_icon)
+	_make_button("AGACHAR", Vector2(-422.5, -193.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _toggle_crouch, true)
+	_make_button("EXPLOSIVO", Vector2(-538.5, -707.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _throw_explosive, true)
+	_make_button("TÁTICO", Vector2(-373.5, -773.5) * ui_scale, Vector2(125.0, 125.0) * ui_scale, _use_tactical, true)
+	_make_button("SAIR", Vector2(18.0, -82.0) * ui_scale, Vector2(88.0, 54.0) * ui_scale, _exit_combat, false)
 	var crosshair := Label.new()
 	crosshair.text = "＋"
 	crosshair.set_anchors_preset(Control.PRESET_CENTER)
@@ -388,7 +415,27 @@ func _new_label(parent: Control, value: String, pos: Vector2, size: int) -> Labe
 	parent.add_child(label)
 	return label
 
-func _make_button(value: String, offset: Vector2, dimensions: Vector2, callback: Callable, right: bool = true) -> void:
+func _find_original_ui_texture(fragment: String) -> String:
+	for root_path in ["res://assets/unity_original/textures", "res://assets/unity_original/bundle_assets"]:
+		var found := _search_original_texture(root_path, fragment.to_lower())
+		if not found.is_empty():
+			return found
+	return ""
+
+func _search_original_texture(folder_path: String, fragment: String) -> String:
+	var directory := DirAccess.open(folder_path)
+	if directory == null:
+		return ""
+	for file_name in directory.get_files():
+		if file_name.to_lower().contains(fragment) and file_name.to_lower().ends_with(".png"):
+			return folder_path.path_join(file_name)
+	for child_name in directory.get_directories():
+		var found := _search_original_texture(folder_path.path_join(child_name), fragment)
+		if not found.is_empty():
+			return found
+	return ""
+
+func _make_button(value: String, offset: Vector2, dimensions: Vector2, callback: Callable, right: bool = true, icon_path: String = "") -> void:
 	var button := Button.new()
 	button.text = value
 	button.size = dimensions
@@ -398,21 +445,34 @@ func _make_button(value: String, offset: Vector2, dimensions: Vector2, callback:
 	else:
 		button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		button.position = offset
+	if not icon_path.is_empty():
+		var texture = load(icon_path)
+		if texture is Texture2D:
+			button.icon = texture
+			button.expand_icon = true
 	button.add_theme_font_size_override("font_size", 16)
 	button.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0))
 	button.pressed.connect(callback)
 	hud.add_child(button)
 
-func _make_hold_button(value: String, offset: Vector2, dimensions: Vector2, right: bool, side: String) -> void:
+func _make_hold_button(value: String, offset: Vector2, dimensions: Vector2, right: bool, side: String, icon_path: String = "", center_left: bool = false) -> void:
 	var button := Button.new()
 	button.text = value
 	button.size = dimensions
-	if right:
+	if center_left:
+		button.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+		button.position = offset
+	elif right:
 		button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 		button.position = offset
 	else:
 		button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		button.position = offset
+	if not icon_path.is_empty():
+		var texture = load(icon_path)
+		if texture is Texture2D:
+			button.icon = texture
+			button.expand_icon = true
 	button.add_theme_font_size_override("font_size", 17)
 	button.add_theme_color_override("font_color", Color(1.0, 0.96, 0.88, 1.0))
 	button.button_down.connect(_set_fire_button.bind(side, true))
@@ -438,7 +498,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if event.index == move_touch_id:
 				move_touch_id = -1
 				move_vector = Vector2.ZERO
-				joystick_knob.position = Vector2(48, 48)
+				joystick_knob.position = (joystick_bg.size - joystick_knob.size) * 0.5
 			if event.index == look_touch_id:
 				look_touch_id = -1
 	elif event is InputEventScreenDrag:
@@ -450,12 +510,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_apply_look(event.relative)
 
 func _update_joystick(position: Vector2) -> void:
-	var center = joystick_bg.position + joystick_bg.size * 0.5
-	var offset = position - center
-	if offset.length() > 48.0:
-		offset = offset.normalized() * 48.0
-	move_vector = Vector2(offset.x / 48.0, -offset.y / 48.0)
-	joystick_knob.position = Vector2(48, 48) + offset
+	var center := joystick_bg.get_global_rect().get_center()
+	var offset := position - center
+	var travel_radius := joystick_bg.size.x * 0.30
+	if offset.length() > travel_radius:
+		offset = offset.normalized() * travel_radius
+	move_vector = Vector2(offset.x / travel_radius, -offset.y / travel_radius)
+	joystick_knob.position = (joystick_bg.size - joystick_knob.size) * 0.5 + offset
 
 func _apply_look(relative: Vector2) -> void:
 	look_yaw -= relative.x * 0.004
