@@ -693,7 +693,12 @@ func _end_combat():
     _show_home()
 func _run_combat_audit():
     _start_combat()
-    await get_tree().create_timer(2.5).timeout
+    await get_tree().create_timer(1.25).timeout
+    var initial_bot_positions: Array[Vector3] = []
+    var initial_bots=world.find_children("BotSoldier_*","CharacterBody3D",true,false) if is_instance_valid(world) else []
+    for initial_bot in initial_bots:
+        initial_bot_positions.append(initial_bot.global_position)
+    await get_tree().create_timer(1.5).timeout
     var bot_count=world.find_children("BotSoldier_*","CharacterBody3D",true,false).size() if is_instance_valid(world) else 0
     var combat_player=combat_session.get("player") if is_instance_valid(combat_session) else null
     var combat_weapon=combat_session.get("weapon_mesh") if is_instance_valid(combat_session) else null
@@ -701,6 +706,24 @@ func _run_combat_audit():
     var navigation_ok=false
     var bot_agent_path_ok=false
     var bot_animation_ok=false
+    var bot_motion_ok=false
+    var bot_facing_ok=false
+    var max_bot_displacement=0.0
+    var best_facing_alignment=-1.0
+    for bot_index in range(mini(bots.size(),initial_bot_positions.size())):
+        var audited_bot=bots[bot_index]
+        var displacement=Vector2(audited_bot.global_position.x-initial_bot_positions[bot_index].x,audited_bot.global_position.z-initial_bot_positions[bot_index].z).length()
+        max_bot_displacement=maxf(max_bot_displacement,displacement)
+        var to_player=combat_player.global_position-audited_bot.global_position
+        to_player.y=0.0
+        if to_player.length()>0.01:
+            var model_forward=-audited_bot.global_transform.basis.z
+            model_forward.y=0.0
+            model_forward=model_forward.normalized()
+            best_facing_alignment=maxf(best_facing_alignment,model_forward.dot(to_player.normalized()))
+    bot_motion_ok=max_bot_displacement>0.15
+    bot_facing_ok=best_facing_alignment>0.65
+    print("BLOCKGUN_BOT_BEHAVIOR_AUDIT moved=",bot_motion_ok," max_displacement=",max_bot_displacement," facing_player=",bot_facing_ok," best_forward_dot=",best_facing_alignment)
     var nav_region=combat_session.get("navigation_region") if is_instance_valid(combat_session) else null
     if is_instance_valid(nav_region) and is_instance_valid(combat_player) and bots.size()>0:
         var nav_map=nav_region.get_navigation_map()
@@ -732,11 +755,11 @@ func _run_combat_audit():
     var weapon_mesh_ok=is_instance_valid(combat_weapon) and combat_weapon.mesh is Mesh
     var weapon_material_check=combat_session.get("weapon_material") if is_instance_valid(combat_session) else null
     var weapon_texture_ok=weapon_material_check is BaseMaterial3D and weapon_material_check.albedo_texture is Texture2D
-    if is_instance_valid(combat_player) and bot_count>0 and navigation_ok and bot_agent_path_ok and bot_animation_ok and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
-        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," navigation=",navigation_ok," bot_agent_path=",bot_agent_path_ok," bot_animation=",bot_animation_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
+    if is_instance_valid(combat_player) and bot_count>0 and navigation_ok and bot_agent_path_ok and bot_motion_ok and bot_facing_ok and bot_animation_ok and soldier_mesh_ok and weapon_mesh_ok and soldier_texture_ok and weapon_texture_ok:
+        print("BLOCKGUN_COMBAT_AUDIT_OK bots=",bot_count," navigation=",navigation_ok," bot_agent_path=",bot_agent_path_ok," bot_motion=",bot_motion_ok," bot_facing=",bot_facing_ok," bot_animation=",bot_animation_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(0)
     else:
-        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count," navigation=",navigation_ok," bot_agent_path=",bot_agent_path_ok," bot_animation=",bot_animation_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
+        push_error("BLOCKGUN_COMBAT_AUDIT_FAILED player=",is_instance_valid(combat_player)," bots=",bot_count," navigation=",navigation_ok," bot_agent_path=",bot_agent_path_ok," bot_motion=",bot_motion_ok," bot_facing=",bot_facing_ok," bot_animation=",bot_animation_ok," soldier_mesh=",soldier_mesh_ok," weapon_mesh=",weapon_mesh_ok," soldier_texture=",soldier_texture_ok," weapon_texture=",weapon_texture_ok)
         get_tree().quit(1)
 func _show_home():
     _stop_walk_mode()
