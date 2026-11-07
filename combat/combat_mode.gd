@@ -44,7 +44,8 @@ var fire_cooldown := 0.0
 var reload_timer := 0.0
 var footstep_timer := 0.0
 var aiming := false
-var auto_fire_enabled := true
+var fire_left_held := false
+var fire_right_held := false
 var dead_timer := 0.0
 var spawn_position := Vector3.ZERO
 var grass_player: AudioStreamPlayer3D
@@ -232,6 +233,8 @@ func _build_hud() -> void:
 	joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_panel(joystick_knob, Color(0.62, 0.78, 0.88, 0.72), 24)
 	joystick_bg.add_child(joystick_knob)
+	_make_hold_button("ATIRAR", Vector2(42, screen.y - 330), Vector2(104, 104), false, "left")
+	_make_hold_button("ATIRAR", Vector2(-126, -278), Vector2(112, 112), true, "right")
 	_make_button("MIRA", Vector2(-254, -164), Vector2(108, 62), _toggle_aim)
 	_make_button("PULAR", Vector2(-130, -154), Vector2(112, 62), _jump)
 	_make_button("RECARREGAR", Vector2(-254, -88), Vector2(108, 58), _reload)
@@ -276,6 +279,28 @@ func _make_button(value: String, offset: Vector2, dimensions: Vector2, callback:
 	button.pressed.connect(callback)
 	hud.add_child(button)
 
+func _make_hold_button(value: String, offset: Vector2, dimensions: Vector2, right: bool, side: String) -> void:
+	var button := Button.new()
+	button.text = value
+	button.size = dimensions
+	if right:
+		button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		button.position = offset
+	else:
+		button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		button.position = offset
+	button.add_theme_font_size_override("font_size", 17)
+	button.add_theme_color_override("font_color", Color(1.0, 0.96, 0.88, 1.0))
+	button.button_down.connect(_set_fire_button.bind(side, true))
+	button.button_up.connect(_set_fire_button.bind(side, false))
+	hud.add_child(button)
+
+func _set_fire_button(side: String, pressed: bool) -> void:
+	if side == "left":
+		fire_left_held = pressed
+	else:
+		fire_right_held = pressed
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var screen = get_viewport().get_visible_rect().size
@@ -318,9 +343,8 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
-		if auto_fire_enabled and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
-		if _find_auto_fire_target():
-			_fire()
+	if (fire_left_held or fire_right_held) and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
+		_fire()
 	if reload_timer > 0.0:
 		reload_timer -= delta
 		if reload_timer <= 0.0:
@@ -365,17 +389,6 @@ func _physics_process(delta: float) -> void:
 			footstep_timer = 0.48
 	if Input.is_key_pressed(KEY_SPACE):
 		_jump()
-
-func _find_auto_fire_target() -> bool:
-	if not is_instance_valid(camera):
-		return false
-	var origin := camera.global_position
-	var direction := -camera.global_transform.basis.z
-	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 100.0)
-	query.collision_mask = 1
-	query.exclude = [player.get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	return not hit.is_empty() and hit.collider is Node and hit.collider.is_in_group("combat_enemy")
 
 func _fire() -> void:
 	if fire_cooldown > 0.0 or reload_timer > 0.0 or dead_timer > 0.0:
