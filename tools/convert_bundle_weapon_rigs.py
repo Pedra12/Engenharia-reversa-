@@ -330,12 +330,22 @@ def main():
     audit = pathlib.Path(args.audit)
     project = pathlib.Path(args.project)
     bundle_root = audit / "bundle_probe"
-    bundle_files = sorted(bundle_root.glob("*/objects.json"))
+    bundle_files = sorted(
+        p for p in bundle_root.glob("*/objects.json")
+        if p.parent.name != "failed_bundles"
+    )
     if not bundle_files:
         raise SystemExit("Original Addressables bundle objects.json not found")
-    bundle_dir = bundle_files[0].parent
+    selected = None
+    for candidate in bundle_files:
+        candidate_objects, candidate_byid = load_objects(candidate.parent)
+        if any(o.get("type") == "GameObject" and o.get("name") == "p_ump_fp" for o in candidate_objects):
+            selected = (candidate.parent, candidate_objects, candidate_byid)
+            break
+    if selected is None:
+        raise SystemExit("No successful bundle contains the original p_ump_fp prefab: " + ", ".join(str(p.parent) for p in bundle_files))
+    bundle_dir, objects, byid = selected
     bundle_name = bundle_dir.name
-    objects, byid = load_objects(bundle_dir)
     gos = {str(o.get("path_id")): o for o in objects if o.get("type") == "GameObject"}
 
     fp_go = find_go("p_ump_fp", gos, byid)
