@@ -15,6 +15,7 @@ var weapon_mount: Node3D
 var weapon_visual: MeshInstance3D
 var dead := false
 var anim_player: OriginalAnimationPlayer
+var navigation_agent: NavigationAgent3D
 var shoot_animation_timer := 0.0
 var current_locomotion := ""
 
@@ -33,6 +34,16 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	collision.shape = capsule
 	collision.position.y = 0.73
 	add_child(collision)
+
+	navigation_agent = NavigationAgent3D.new()
+	navigation_agent.name = "OriginalForestNavigationAgent"
+	navigation_agent.navigation_layers = 1
+	navigation_agent.radius = 0.4
+	navigation_agent.height = 1.8
+	navigation_agent.path_desired_distance = 0.4
+	navigation_agent.target_desired_distance = 1.25
+	navigation_agent.path_max_distance = 60.0
+	add_child(navigation_agent)
 
 	var rig := rig_loader.create_rig(self, "sk_char_sold_male_01", false)
 	if rig.is_empty():
@@ -72,13 +83,24 @@ func _physics_process(delta: float) -> void:
 	if distance > 0.01:
 		var facing := atan2(-to_target.x, -to_target.z) + PI # Unity original soldier faces +Z; Godot model forward is -Z.
 		rotation.y = lerp_angle(rotation.y, facing, delta * 5.0)
+	var direct_direction := to_target.normalized() if distance > 0.01 else Vector3.ZERO
+	var movement_direction := direct_direction
+	if navigation_agent and is_instance_valid(navigation_agent):
+		if navigation_agent.target_position.distance_to(target.global_position) > 0.5:
+			navigation_agent.target_position = target.global_position
+		if not navigation_agent.is_navigation_finished():
+			var next_path_position := navigation_agent.get_next_path_position()
+			var path_direction := next_path_position - global_position
+			path_direction.y = 0.0
+			if path_direction.length() > 0.15:
+				movement_direction = path_direction.normalized()
 	var direction := Vector3.ZERO
 	if distance > 9.0:
-		direction = to_target.normalized()
+		direction = movement_direction
 	elif distance < 4.5:
-		direction = -to_target.normalized()
+		direction = -movement_direction
 	else:
-		direction = to_target.normalized() * 0.18
+		direction = movement_direction * 0.18
 		direction += Vector3(sin(strafe_phase), 0.0, cos(strafe_phase)) * 0.48
 	velocity.x = direction.x * speed
 	velocity.z = direction.z * speed
