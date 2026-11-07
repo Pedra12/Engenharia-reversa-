@@ -86,8 +86,7 @@ func _physics_process(delta: float) -> void:
 	if dead or not is_instance_valid(combat):
 		return
 	var selected_target = combat.call("get_best_target", self, team_id)
-	if selected_target is CharacterBody3D:
-		target = selected_target
+	target = selected_target as CharacterBody3D
 	if not is_instance_valid(target):
 		velocity.x = move_toward(velocity.x, 0.0, speed * delta)
 		velocity.z = move_toward(velocity.z, 0.0, speed * delta)
@@ -183,7 +182,7 @@ func reset_for_respawn(new_position: Vector3) -> void:
 	if anim_player and anim_player.has_clip("Rifle_Idle_gun_down"):
 		anim_player.play("Rifle_Idle_gun_down", 0.12, 1.0, true)
 
-func take_damage(amount: float, headshot: bool = false, attacker_team: int = 0) -> bool:
+func take_damage(amount: float, headshot: bool = false, attacker_team: int = 0, attacker_is_player: bool = false) -> bool:
 	if dead:
 		return false
 	health -= amount * (1.7 if headshot else 1.0)
@@ -199,6 +198,6 @@ func take_damage(amount: float, headshot: bool = false, attacker_team: int = 0) 
 			elif anim_player.has_clip("Hit Reaction"):
 				anim_player.play("Hit Reaction", 0.04, 1.0, false)
 		if is_instance_valid(combat):
-			combat.call("bot_killed", self, team_id, attacker_team)
+			combat.call("bot_killed", self, team_id, attacker_team, attacker_is_player)
 		return true
 	return false
