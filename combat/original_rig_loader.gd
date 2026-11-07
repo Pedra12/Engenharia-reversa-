@@ -98,6 +98,116 @@ func create_rig(parent: Node3D, rig_name: String, apply_model_parent: bool = fal
 		"rig_data": rig
 	}
 
+func create_ump45_fp(parent: Node3D) -> Dictionary:
+	const weapon_db_path := "res://assets/combat_source/original_weapon_rigs.json"
+	if not FileAccess.file_exists(weapon_db_path):
+		push_error("Original UMP45 rig database missing: " + weapon_db_path)
+		return {}
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(weapon_db_path))
+	if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("UMP45"):
+		push_error("Original UMP45 rig database is invalid")
+		return {}
+	var rig: Dictionary = parsed["UMP45"]
+
+	var root := Node3D.new()
+	root.name = "UMP45_FP_OriginalPrefab"
+	root.transform = _transform_from_record(rig.get("prefab_transform", {}))
+	parent.add_child(root)
+
+	var model_base := Node3D.new()
+	model_base.name = "Local_model_base"
+	model_base.transform = _transform_from_record(rig.get("model_base_transform", {}))
+	root.add_child(model_base)
+
+	var model_root := Node3D.new()
+	model_root.name = "UMP_45_bitgun_test"
+	model_root.transform = _transform_from_record(rig.get("model_root_transform", {}))
+	model_base.add_child(model_root)
+
+	var skeleton := Skeleton3D.new()
+	skeleton.name = "UMP45_OriginalSkeleton"
+	var bone_records: Array = rig.get("bones", [])
+	var bone_names: Array[String] = []
+	for bone in bone_records:
+		var bone_name := String(bone.get("name", "bone"))
+		bone_names.append(bone_name)
+		skeleton.add_bone(bone_name)
+	for i in range(bone_records.size()):
+		var bone: Dictionary = bone_records[i]
+		var parent_index := int(bone.get("parent", -1))
+		if parent_index >= 0 and parent_index < i:
+			skeleton.set_bone_parent(i, parent_index)
+		skeleton.set_bone_rest(i, _transform_from_record(bone))
+	model_root.add_child(skeleton)
+	skeleton.transform = _transform_from_record(rig.get("skeleton_transform", {}))
+
+	var mesh_instances: Dictionary = {}
+	var mesh_records: Dictionary = rig.get("meshes", {})
+	for mesh_key in mesh_records:
+		var mesh_data: Dictionary = mesh_records[mesh_key]
+		var skin := Skin.new()
+		var bind_poses: Array = mesh_data.get("bind_poses", [])
+		var bone_map: Array = mesh_data.get("mesh_bone_to_avatar", [])
+		for i in range(mini(bind_poses.size(), bone_map.size())):
+			skin.add_bind(int(bone_map[i]), _matrix_to_transform(bind_poses[i]))
+
+		var array_mesh := ArrayMesh.new()
+		var surfaces: Array = mesh_data.get("surfaces", [])
+		for surface_index in range(surfaces.size()):
+			var surface: Dictionary = surfaces[surface_index]
+			var arrays: Array = []
+			arrays.resize(Mesh.ARRAY_MAX)
+			arrays[Mesh.ARRAY_VERTEX] = _to_vec3_array(surface.get("vertices", []))
+			arrays[Mesh.ARRAY_NORMAL] = _to_vec3_array(surface.get("normals", []))
+			arrays[Mesh.ARRAY_TEX_UV] = _to_vec2_array(surface.get("uvs", []))
+			arrays[Mesh.ARRAY_BONES] = _to_int_array(surface.get("bones", []))
+			arrays[Mesh.ARRAY_WEIGHTS] = _to_float_array(surface.get("weights", []))
+			arrays[Mesh.ARRAY_INDEX] = _to_int_array(surface.get("indices", []))
+			array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+			var material_index := int(surface.get("material_index", surface_index))
+			var texture_names: Array = mesh_data.get("textures", [])
+			if material_index >= 0 and material_index < texture_names.size():
+				var texture_path := String(texture_names[material_index])
+				if not texture_path.is_empty():
+					var texture := _load_original_texture(texture_path)
+					if texture:
+						var material := StandardMaterial3D.new()
+						material.albedo_texture = texture
+						material.roughness = 1.0
+						array_mesh.surface_set_material(surface_index, material)
+
+		var instance := MeshInstance3D.new()
+		instance.name = "UMP45_" + String(mesh_key).capitalize() + "_OriginalSkinnedMesh"
+		instance.mesh = array_mesh
+		instance.skin = skin
+		instance.transform = _transform_from_record(mesh_data.get("mesh_transform", {}))
+		model_root.add_child(instance)
+		instance.skeleton = instance.get_path_to(skeleton)
+		mesh_instances[String(mesh_key)] = instance
+
+	var socket_nodes: Dictionary = {}
+	var sockets: Dictionary = rig.get("sockets", {})
+	for socket_name in sockets:
+		var socket: Dictionary = sockets[socket_name]
+		var parent_bone := String(socket.get("parent_bone", ""))
+		if parent_bone.is_empty():
+			continue
+		var attachment := create_bone_attachment(skeleton, parent_bone, String(socket_name))
+		attachment.transform = _transform_from_record(socket.get("transform", {}))
+		socket_nodes[String(socket_name)] = attachment
+
+	return {
+		"root": root,
+		"model_root": model_root,
+		"skeleton": skeleton,
+		"meshes": mesh_instances,
+		"sockets": socket_nodes,
+		"bone_names": bone_names,
+		"animations": rig.get("animations", {}),
+		"sounds": rig.get("sounds", {}),
+		"rig_data": rig
+	}
+
 func get_bone_index(rig_name: String, bone_name: String) -> int:
 	if not _load_database() or not _database.has(rig_name):
 		return -1
@@ -124,10 +234,12 @@ func create_bone_attachment(skeleton: Skeleton3D, bone_name: String, attachment_
 	return attachment
 
 func _load_original_texture(file_name: String) -> Texture2D:
-	var paths := [
-		TEXTURE_ROOT + file_name,
-		"res://assets/unity_original/bundle_assets/" + file_name
-	]
+	var paths: Array[String] = []
+	if file_name.begins_with("res://"):
+		paths.append(file_name)
+	else:
+		paths.append(TEXTURE_ROOT + file_name)
+		paths.append("res://assets/unity_original/bundle_assets/" + file_name)
 	for path in paths:
 		if ResourceLoader.exists(path):
 			var resource = load(path)
