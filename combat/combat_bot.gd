@@ -85,7 +85,7 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 		weapon_mount.add_child(weapon_visual)
 
 func _physics_process(delta: float) -> void:
-	if dead or not is_instance_valid(combat):
+	if dead or not is_instance_valid(combat) or bool(combat.get("match_finished")):
 		return
 	var selected_target = combat.call("get_best_target", self, team_id)
 	target = selected_target as CharacterBody3D
