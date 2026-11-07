@@ -4,11 +4,18 @@ var player: Node3D
 var bots: Array = []
 var radar_range := 85.0
 var forest_map_texture: Texture2D
+var enemy_marker_texture: Texture2D
+var radar_border_texture: Texture2D
+var compass_texture: Texture2D
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
-	var map_path := _find_forest_minimap("res://assets/unity_original/textures")
+	var texture_root := "res://assets/unity_original/textures"
+	enemy_marker_texture = _load_original_texture(texture_root, "minimap_enemy")
+	radar_border_texture = _load_original_texture(texture_root, "minimap_circle_border")
+	compass_texture = _load_original_texture(texture_root, "minimap_compass")
+	var map_path := _find_forest_minimap(texture_root)
 	if not map_path.is_empty():
 		# Load through Godot's import pipeline. Image.load_from_file(res://...) works
 		# in editor runs but bypasses exported resource remapping in Android builds.
@@ -33,6 +40,20 @@ func _ready() -> void:
 			push_warning("BLOCKGUN_RADAR_TEXTURE_MISSING imported forest minimap: " + map_path)
 	else:
 		push_warning("BLOCKGUN_RADAR_TEXTURE_MISSING no original forest minimap found")
+
+func _load_original_texture(folder_path: String, token: String) -> Texture2D:
+	var directory := DirAccess.open(folder_path)
+	if directory == null:
+		return null
+	for file_name in directory.get_files():
+		var lower := file_name.to_lower()
+		if lower.ends_with(".png") and lower.contains(token) and lower.contains("sprite"):
+			return ResourceLoader.load(folder_path.path_join(file_name)) as Texture2D
+	for child_name in directory.get_directories():
+		var found := _load_original_texture(folder_path.path_join(child_name), token)
+		if found != null:
+			return found
+	return null
 
 func _find_forest_minimap(folder_path: String) -> String:
 	var directory := DirAccess.open(folder_path)
@@ -60,6 +81,10 @@ func _draw() -> void:
 		draw_texture_rect(forest_map_texture, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0), false, Color(1.0, 1.0, 1.0, 0.88))
 	draw_circle(center, radius * 0.72, Color(0.035, 0.105, 0.12, 0.12))
 	draw_arc(center, radius, 0.0, TAU, 72, Color(0.42, 0.72, 0.78, 0.86), 2.2, true)
+	if compass_texture != null:
+		draw_texture_rect(compass_texture, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0), false, Color(1, 1, 1, 0.92))
+	if radar_border_texture != null:
+		draw_texture_rect(radar_border_texture, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0), false)
 	draw_arc(center, radius * 0.66, 0.0, TAU, 64, Color(0.32, 0.61, 0.67, 0.42), 1.0, true)
 	draw_arc(center, radius * 0.33, 0.0, TAU, 48, Color(0.32, 0.61, 0.67, 0.32), 1.0, true)
 	draw_line(Vector2(center.x - radius, center.y), Vector2(center.x + radius, center.y), Color(0.32, 0.61, 0.67, 0.25), 1.0)
@@ -85,5 +110,8 @@ func _draw() -> void:
 			if normalized.length() > 1.0:
 				continue
 			var point := center + normalized * radius
-			draw_circle(point, 5.0, Color(1.0, 0.28, 0.2, 1.0))
-			draw_arc(point, 7.2, 0.0, TAU, 20, Color(1.0, 0.68, 0.45, 0.9), 1.2, true)
+			if enemy_marker_texture != null:
+				draw_texture_rect(enemy_marker_texture, Rect2(point - Vector2(7.0, 7.0), Vector2(14.0, 14.0)), false)
+			else:
+				draw_circle(point, 5.0, Color(1.0, 0.28, 0.2, 1.0))
+				draw_arc(point, 7.2, 0.0, TAU, 20, Color(1.0, 0.68, 0.45, 0.9), 1.2, true)
