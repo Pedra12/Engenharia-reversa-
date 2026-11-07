@@ -34,7 +34,7 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	collision.position.y = 0.73
 	add_child(collision)
 
-	var rig := rig_loader.create_rig(self, "sk_char_sold_male_01", true)
+	var rig := rig_loader.create_rig(self, "sk_char_sold_male_01", false)
 	if rig.is_empty():
 		push_error("Original soldier rig could not be loaded for bot.")
 		return
