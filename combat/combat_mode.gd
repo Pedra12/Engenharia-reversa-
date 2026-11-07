@@ -48,6 +48,8 @@ var fire_left_held := false
 var fire_right_held := false
 var dead_timer := 0.0
 var spawn_position := Vector3.ZERO
+var original_spawn_data: Dictionary = {}
+var used_spawn_positions: Array[Vector3] = []
 var grass_player: AudioStreamPlayer3D
 var jump_player: AudioStreamPlayer3D
 var reload_player: AudioStreamPlayer
@@ -58,6 +60,7 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	return_callback = on_return
 	rng.randomize()
 	_prepare_assets()
+	_load_original_spawn_points()
 	_create_player()
 	_create_bots()
 	_build_hud()
@@ -99,6 +102,41 @@ func _find_floor(reference: Vector3, radius: float = 32.0) -> Dictionary:
 			best = hit
 	return best
 
+func _load_original_spawn_points() -> void:
+	var path := "res://assets/combat_source/original_forest_spawn_points.json"
+	if not FileAccess.file_exists(path):
+		push_warning("Original forest spawn data unavailable; using map bounds.")
+		return
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(parsed) == TYPE_DICTIONARY:
+		original_spawn_data = parsed
+
+func _get_original_spawn_positions(group: String) -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	var groups: Dictionary = original_spawn_data.get("spawn_groups", {})
+	for entry in groups.get(group, []):
+		var value: Array = entry.get("godot_position", [])
+		if value.size() >= 3:
+			result.append(Vector3(float(value[0]), float(value[1]), float(value[2])))
+	return result
+
+func _choose_spawn_position(candidates: Array[Vector3], used: Array[Vector3]) -> Vector3:
+	if candidates.is_empty():
+		return _map_center()
+	var best := candidates[rng.randi_range(0, candidates.size() - 1)]
+	var best_distance := -1.0
+	for candidate in candidates:
+		var minimum_distance := INF
+		if used.is_empty():
+			minimum_distance = rng.randf()
+		else:
+			for occupied in used:
+				minimum_distance = minf(minimum_distance, candidate.distance_to(occupied))
+		if minimum_distance > best_distance:
+			best_distance = minimum_distance
+			best = candidate
+	return best
+
 func _map_center() -> Vector3:
 	var bounds := AABB()
 	var found := false
@@ -110,6 +148,12 @@ func _map_center() -> Vector3:
 				found = true
 			else:
 				bounds = bounds.merge(box)
+	var center_data: Dictionary = original_spawn_data.get("map_center", {})
+	var center_values: Array = center_data.get("godot", [])
+	if center_values.size() >= 3:
+		var original_center := Vector3(float(center_values[0]), float(center_values[1]), float(center_values[2]))
+		if not found or bounds.grow(15.0).has_point(original_center):
+			return original_center
 	if found:
 		return bounds.get_center()
 	return map_root.global_position
@@ -127,15 +171,19 @@ func _create_player() -> void:
 	collision.position.y = 0.9
 	player.add_child(collision)
 	map_root.add_child(player)
-	var center = _map_center()
-	var floor_hit = _find_floor(center)
+	var center := _map_center()
+	var original_points := _get_original_spawn_positions("generic")
+	var requested_spawn := _choose_spawn_position(original_points, [])
+	var floor_hit := _find_floor(requested_spawn if not original_points.is_empty() else center)
 	if floor_hit.is_empty():
-		floor_hit = _find_floor(Vector3(40.0, center.y, 40.0))
+		floor_hit = _find_floor(center)
 	if floor_hit.is_empty():
 		spawn_position = center + Vector3.UP * 4.0
 		push_warning("Combat spawn fallback used; no safe floor ray was found.")
 	else:
 		spawn_position = floor_hit.position + Vector3.UP * 0.12
+	used_spawn_positions.clear()
+	used_spawn_positions.append(spawn_position)
 	player.global_position = spawn_position
 	camera_pivot = Node3D.new()
 	camera_pivot.position = Vector3(0.0, 1.58, 0.0)
@@ -184,19 +232,23 @@ func _create_bots() -> void:
 	if not rig_loader:
 		push_error("Original Unity rig loader missing; refusing to create placeholder enemies.")
 		return
-	var offsets = [Vector3(10, 0, 4), Vector3(-12, 0, -5), Vector3(5, 0, -15)]
-	for index in range(offsets.size()):
-		var guess = spawn_position + offsets[index]
-		var floor_hit = _find_floor(guess, 10.0)
+	var candidates := _get_original_spawn_positions("generic")
+	var fallback_offsets := [Vector3(10, 0, 4), Vector3(-12, 0, -5), Vector3(5, 0, -15)]
+	for index in range(3):
+		var guess := _choose_spawn_position(candidates, used_spawn_positions) if not candidates.is_empty() else spawn_position + fallback_offsets[index]
+		var floor_hit := _find_floor(guess, 8.0)
+		if floor_hit.is_empty():
+			floor_hit = _find_floor(spawn_position + fallback_offsets[index], 10.0)
 		if floor_hit.is_empty():
 			continue
-		var bot = CharacterBody3D.new()
+		var bot := CharacterBody3D.new()
 		bot.set_script(BOT_SCRIPT)
 		bot.name = "BotSoldier_%02d" % (index + 1)
 		map_root.add_child(bot)
 		bot.global_position = floor_hit.position + Vector3.UP * 0.12
+		used_spawn_positions.append(bot.global_position)
 		bot.call("configure", player, self, rig_loader, load(UMP_MESH_PATH), weapon_material)
-	print("COMBAT_BOTS_SPAWNED count=", map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false).size())
+	print("COMBAT_BOTS_SPAWNED count=", map_root.find_children("BotSoldier_*", "CharacterBody3D", true, false).size(), " original_generic_spawns=", candidates.size())
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
