@@ -2,7 +2,7 @@ extends Node3D
 
 const BOT_SCRIPT = preload("res://combat/combat_bot.gd")
 const RIG_LOADER_SCRIPT = preload("res://combat/original_rig_loader.gd")
-const ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_animation_player.gd")
+const WEAPON_ANIMATION_PLAYER_SCRIPT = preload("res://combat/original_weapon_animation_player.gd")
 const UMP_MESH_PATH = "res://assets/combat_source/meshes/UMP_45_2.obj"
 const SOLDIER_TEXTURE_PATH = "res://assets/combat_source/textures/SimpleMilitary_Soldier01_Black_-6561600483854028127.png"
 const UMP_TEXTURE_PATH = "res://assets/combat_source/textures/UMP_45_Diffuse_-7805003812694618604.png"
@@ -20,9 +20,8 @@ var weapon_mesh: MeshInstance3D
 var rig_loader: OriginalRigLoader
 var player_fp_rig: Dictionary
 var player_weapon_attachment: BoneAttachment3D
-var player_animation_player: OriginalAnimationPlayer
-var player_animation_lock := 0.0
-var current_player_animation := ""
+var weapon_animation_player: OriginalWeaponAnimationPlayer
+var weapon_sway: Node3D
 var weapon_material: StandardMaterial3D
 var hud: Control
 var health_label: Label
@@ -145,35 +144,22 @@ func _create_player() -> void:
 	camera.fov = 70.0
 	camera.current = true
 	camera_pivot.add_child(camera)
-	player_fp_rig = rig_loader.create_rig(camera, "sk_gloves", true)
+	weapon_mount = Node3D.new()
+	weapon_mount.name = "WeaponRecoilPivot"
+	camera.add_child(weapon_mount)
+	weapon_sway = Node3D.new()
+	weapon_sway.name = "WeaponSwayPivot"
+	weapon_mount.add_child(weapon_sway)
+	player_fp_rig = rig_loader.create_ump45_fp(weapon_sway)
 	if player_fp_rig.is_empty():
-		push_error("Original first-person hand rig could not be created.")
+		push_error("Original skinned UMP45 + Hands first-person prefab could not be created.")
 	else:
-		player_animation_player = ANIMATION_PLAYER_SCRIPT.new()
-		camera.add_child(player_animation_player)
-		var hand_retarget := rig_loader.build_retarget_map("sk_char_sold_male_01", "sk_gloves", {
-			"upperarm_l": "DEF-upper_arm.L",
-			"lowerarm_l": "DEF-forearm.L",
-			"hand_l": "DEF-hand.L",
-			"upperarm_r": "DEF-upper_arm.R",
-			"lowerarm_r": "DEF-forearm.R",
-			"hand_r": "DEF-hand.R"
-		})
-		player_animation_player.setup(player_fp_rig["skeleton"], hand_retarget)
-		if player_animation_player.has_clip("Rifle_Idle_gun_down"):
-			player_animation_player.play("Rifle_Idle_gun_down", 0.14, 1.0, true)
-		else:
-			player_animation_player.play("Idle")
-		player_weapon_attachment = rig_loader.create_bone_attachment(player_fp_rig["skeleton"], "DEF-hand.R", "OriginalWeaponSocket")
-		weapon_mount = Node3D.new()
-		weapon_mount.name = "WeaponMount"
-		player_weapon_attachment.add_child(weapon_mount)
-		var weapon_resource = load(UMP_MESH_PATH)
-		if weapon_resource is Mesh:
-			weapon_mesh = MeshInstance3D.new()
-			weapon_mesh.mesh = weapon_resource
-			weapon_mesh.material_override = weapon_material
-			weapon_mount.add_child(weapon_mesh)
+		weapon_mesh = player_fp_rig.get("meshes", {}).get("weapon")
+		weapon_animation_player = WEAPON_ANIMATION_PLAYER_SCRIPT.new()
+		weapon_mount.add_child(weapon_animation_player)
+		weapon_animation_player.setup(player_fp_rig.get("rig_data", {}), player_fp_rig["skeleton"])
+		weapon_animation_player.sound_event.connect(_on_weapon_sound_event)
+		weapon_animation_player.play("Deploy", 1.0, false)
 	_create_audio()
 
 func _create_audio() -> void:
@@ -332,8 +318,7 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	fire_cooldown = maxf(0.0, fire_cooldown - delta)
-	player_animation_lock = maxf(0.0, player_animation_lock - delta)
-	if auto_fire_enabled and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
+		if auto_fire_enabled and fire_cooldown <= 0.0 and reload_timer <= 0.0 and dead_timer <= 0.0:
 		if _find_auto_fire_target():
 			_fire()
 	if reload_timer > 0.0:
@@ -368,17 +353,11 @@ func _physics_process(delta: float) -> void:
 	player.velocity.x = direction.x * speed
 	player.velocity.z = direction.z * speed
 	player.move_and_slide()
-	if player_animation_player and player_animation_lock <= 0.0:
-		var desired_animation := "Rifle_Idle_gun_down"
-		if aiming and player_animation_player.has_clip("zoom_idle"):
-			desired_animation = "zoom_idle"
-		elif direction.length() > 0.15:
-			desired_animation = "front_run" if speed >= 4.5 else "front_walk"
-		if not player_animation_player.has_clip(desired_animation):
-			desired_animation = "Idle"
-		if desired_animation != current_player_animation:
-			current_player_animation = desired_animation
-			player_animation_player.play(desired_animation, 0.14, 1.0, true)
+	if weapon_sway:
+		var sway_target := Vector3(-input_dir.x * 0.018, absf(input_dir.y) * 0.012, 0.0)
+		if aiming:
+			sway_target *= 0.35
+		weapon_sway.position = weapon_sway.position.lerp(sway_target, clampf(delta * 7.0, 0.0, 1.0))
 	if direction.length() > 0.15:
 		footstep_timer -= delta
 		if footstep_timer <= 0.0 and grass_player and not grass_player.playing:
@@ -406,13 +385,13 @@ func _fire() -> void:
 		return
 	ammo -= 1
 	fire_cooldown = 0.12
-	if player_animation_player and player_animation_player.has_clip("Fire"):
-		player_animation_player.play("Fire", 0.04, 1.0, false)
-		player_animation_lock = 0.28
-		current_player_animation = ""
-	weapon_mount.position.z = -0.44
-	var tween = create_tween()
-	tween.tween_property(weapon_mount, "position:z", -0.52, 0.09)
+	if weapon_animation_player:
+		weapon_animation_player.play("Fire", 1.0, false)
+	if weapon_mount:
+		weapon_mount.position.z = 0.035
+		var tween = create_tween()
+		tween.tween_property(weapon_mount, "position:z", 0.0, 0.09)
+	_play_weapon_sound("ump45_fire")
 	var origin = camera.global_position
 	var direction = -camera.global_transform.basis.z
 	var query = PhysicsRayQueryParameters3D.create(origin, origin + direction * 110.0)
@@ -431,6 +410,24 @@ func _fire() -> void:
 			if killed:
 				status_label.text = "ALVO ELIMINADO"
 	_update_hud()
+
+func _on_weapon_sound_event(sound_name: String, resource_path: String) -> void:
+	if resource_path.is_empty() or not ResourceLoader.exists(resource_path):
+		return
+	var sound := AudioStreamPlayer3D.new()
+	sound.stream = load(resource_path)
+	sound.volume_db = -5.0
+	if is_instance_valid(player):
+		player.add_child(sound)
+	else:
+		add_child(sound)
+	sound.play()
+	sound.finished.connect(sound.queue_free)
+
+func _play_weapon_sound(sound_name: String) -> void:
+	if not weapon_animation_player:
+		return
+	_on_weapon_sound_event(sound_name, weapon_animation_player.get_sound_path(sound_name))
 
 func _show_damage(amount: int, headshot: bool) -> void:
 	hit_label.text = ("HEADSHOT  " if headshot else "") + str(amount)
@@ -472,11 +469,9 @@ func _remove_dead_bot(bot: Node3D) -> void:
 func _reload() -> void:
 	if reload_timer > 0.0 or ammo >= 30 or reserve_ammo <= 0:
 		return
-	reload_timer = 1.35
-	if player_animation_player and player_animation_player.has_clip("Reload"):
-		player_animation_player.play("Reload", 0.05, 1.0, false)
-		player_animation_lock = 1.25
-		current_player_animation = ""
+	reload_timer = weapon_animation_player.get_duration("Reload") if weapon_animation_player else 3.35
+	if weapon_animation_player:
+		weapon_animation_player.play("Reload", 1.0, false)
 	status_label.text = "RECARREGANDO..."
 	if reload_player:
 		reload_player.play()
@@ -484,20 +479,11 @@ func _reload() -> void:
 func _toggle_aim() -> void:
 	aiming = not aiming
 	camera.fov = 54.0 if aiming else 70.0
-	if player_animation_player:
-		var aim_clip := "zoom_idle" if aiming else "Rifle_Idle_gun_down"
-		if player_animation_player.has_clip(aim_clip):
-			player_animation_player.play(aim_clip, 0.14, 1.0)
-			current_player_animation = aim_clip
 	status_label.text = "MIRA ATIVADA" if aiming else "MODO DE DISPARO"
 
 func _jump() -> void:
 	if player.is_on_floor() and dead_timer <= 0.0:
 		player.velocity.y = 6.2
-		if player_animation_player and player_animation_player.has_clip("jump_loop"):
-			player_animation_player.play("jump_loop", 0.04, 1.0, false)
-			player_animation_lock = 0.45
-			current_player_animation = ""
 		if jump_player:
 			jump_player.play()
 
