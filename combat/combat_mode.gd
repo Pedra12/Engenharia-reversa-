@@ -94,6 +94,11 @@ func begin(existing_map: Node3D, on_return: Callable) -> void:
 	_prepare_assets()
 	_load_original_spawn_points()
 	_create_navigation_region()
+	# Let the NavigationServer synchronize the recovered forest polygons before
+	# any player or bot asks for closest points or routes on this map.
+	if is_instance_valid(navigation_region):
+		await get_tree().physics_frame
+		await get_tree().physics_frame
 	_create_player()
 	_create_bots()
 	_create_pickups()
