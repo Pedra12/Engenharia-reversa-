@@ -27,7 +27,7 @@ func configure(player_target: CharacterBody3D, combat_owner: Node, original_rig_
 	combat = combat_owner
 	rig_loader = original_rig_loader
 	collision_layer = 4 # layer 3: bots
-	collision_mask = 3 # world (1) + player (2)
+	collision_mask = 7 # world (1) + player (2) + bots (3)
 	add_to_group("combat_enemy")
 
 	var capsule := CapsuleShape3D.new()
@@ -161,7 +161,7 @@ func _has_clear_shot() -> bool:
 	var from := global_position + Vector3.UP * 1.35
 	var to := target.global_position + Vector3.UP * 1.1
 	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.collision_mask = 3
+	query.collision_mask = 7
 	query.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	return not hit.is_empty() and hit.collider == target
@@ -176,7 +176,7 @@ func reset_for_respawn(new_position: Vector3) -> void:
 	global_position = new_position
 	rotation = Vector3.ZERO
 	collision_layer = 4
-	collision_mask = 3
+	collision_mask = 7
 	set_physics_process(true)
 	visible = true
 	if anim_player and anim_player.has_clip("Rifle_Idle_gun_down"):
